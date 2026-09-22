@@ -119,32 +119,26 @@ async function getPainelData({ periodo, de, ate }) {
     fetchAllPedidos({ dataInicial, dataFinal }),
   ]);
 
-  const { columns, situacaoIdToKey } = situacoesService.buildColumnDefinitions(situacoes);
+  const { columns, situacaoIdToKey, allSituacaoIds } = situacoesService.buildColumnDefinitions(situacoes);
 
-  // key -> array de pedidos resumidos
+  // Só as situações da lista permitida (ver situacoesService.js) viram coluna. Pedidos em
+  // qualquer outra situação da conta são intencionalmente deixados de fora do painel —
+  // não contam no resumo nem aparecem em lugar nenhum.
   const pedidosPorColuna = new Map(columns.map((c) => [c.key, []]));
-  let naoMapeados = 0;
+  let idsSituacaoDesconhecidos = false;
 
   for (const pedidoBruto of pedidosBrutos) {
     const idSituacao = pedidoBruto.situacao ? pedidoBruto.situacao.id : undefined;
-    let key = situacaoIdToKey.get(idSituacao);
+    const key = situacaoIdToKey.get(idSituacao);
 
     if (!key) {
-      // Situação não estava na lista cacheada (ex.: criada/alterada após o último fetch).
-      // Não descartamos o pedido: criamos uma coluna de fallback para não escondê-lo.
-      naoMapeados += 1;
-      key = `__nao_mapeado_${idSituacao}`;
-      if (!pedidosPorColuna.has(key)) {
-        pedidosPorColuna.set(key, []);
-        columns.push({
-          key,
-          label: `Situação não reconhecida (id ${idSituacao})`,
-          situacaoIds: [idSituacao],
-          nomesOriginais: [],
-          cor: null,
-          naoMapeada: true,
-        });
+      if (!allSituacaoIds.has(idSituacao)) {
+        // Id de situação totalmente desconhecido do cache (pode ter sido criado depois
+        // do último fetch) — força atualizar o cache de situações pra próxima consulta,
+        // mas não exibimos nada no painel para ele mesmo assim (fora da lista pedida).
+        idsSituacaoDesconhecidos = true;
       }
+      continue;
     }
     pedidosPorColuna.get(key).push(formatPedidoResumo(pedidoBruto));
   }
@@ -163,18 +157,19 @@ async function getPainelData({ periodo, de, ate }) {
     key: c.key,
     label: c.label,
     cor: c.cor,
-    naoMapeada: Boolean(c.naoMapeada),
     total: pedidosPorColuna.get(c.key).length,
     pedidos: pedidosPorColuna.get(c.key),
   }));
 
-  const totalPedidos = pedidosBrutos.length;
-  const pedidosHoje = pedidosBrutos.filter((p) => isHoje(p.data)).length;
+  // Resumo do topo reflete só o que está sendo exibido (situações permitidas).
+  const totalPedidos = colunasFinal.reduce((acc, c) => acc + c.total, 0);
+  const pedidosHoje = colunasFinal.reduce(
+    (acc, c) => acc + c.pedidos.filter((p) => isHoje(p.data)).length,
+    0
+  );
   const statusAtivos = colunasFinal.filter((c) => c.total > 0).length;
 
-  if (naoMapeados > 0) {
-    // Situação pode ter sido criada/renomeada entre uma atualização do cache e outra;
-    // forçamos um refresh do cache de situações para a próxima consulta já vir correta.
+  if (idsSituacaoDesconhecidos) {
     situacoesService.getSituacoesVendas({ forceRefresh: true }).catch(() => {});
   }
 
