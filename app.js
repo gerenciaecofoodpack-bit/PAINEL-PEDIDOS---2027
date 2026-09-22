@@ -14,7 +14,6 @@
     summaryTotal: document.getElementById('summary-total'),
     summaryHoje: document.getElementById('summary-hoje'),
     summaryStatusAtivos: document.getElementById('summary-status-ativos'),
-    summaryStatusTotal: document.getElementById('summary-status-total'),
     searchInput: document.getElementById('search-input'),
     periodSelect: document.getElementById('period-select'),
     customPeriodGroup: document.getElementById('custom-period-group'),
@@ -24,6 +23,13 @@
     columnsGrid: document.getElementById('columns-grid'),
     columnTemplate: document.getElementById('column-template'),
     orderTemplate: document.getElementById('order-template'),
+    statusFilterGroup: document.getElementById('status-filter-group'),
+    statusFilterBtn: document.getElementById('status-filter-btn'),
+    statusFilterCount: document.getElementById('status-filter-count'),
+    statusFilterPanel: document.getElementById('status-filter-panel'),
+    statusFilterOptions: document.getElementById('status-filter-options'),
+    statusFilterAllBtn: document.getElementById('status-filter-all'),
+    statusFilterClearBtn: document.getElementById('status-filter-clear'),
   };
 
   const state = {
@@ -40,17 +46,14 @@
     fetching: false,
     pollTimer: null,
     autoScrollTimer: null,
+    lastManualScrollAt: 0,
+    // Filtro de status (multi-seleção): conjunto das "key" de coluna que devem aparecer
+    // no quadro. É inicializado com todas as situações assim que a primeira resposta do
+    // backend chega (equivalente a "sem filtro"/mostrar tudo, igual ao comportamento
+    // anterior) e só passa a restringir de fato quando o usuário desmarcar algo.
+    statusFilter: new Set(),
+    statusFilterKnownKeys: null, // string com as keys conhecidas, pra saber quando reconstruir o painel de opções
   };
-
-  const currencyFormatter = new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-
-  function formatCurrency(value) {
-    if (typeof value !== 'number') return '-';
-    return currencyFormatter.format(value);
-  }
 
   function formatDateBR(isoDateStr) {
     if (!isoDateStr) return '-';
@@ -110,7 +113,6 @@
     el.summaryTotal.textContent = painel.resumo.totalPedidos;
     el.summaryHoje.textContent = painel.resumo.pedidosHoje;
     el.summaryStatusAtivos.textContent = painel.resumo.statusAtivos;
-    el.summaryStatusTotal.textContent = painel.resumo.totalStatus;
   }
 
   function orderMatchesSearch(pedido, search) {
@@ -126,11 +128,26 @@
   // navegador pesado com milhares de nós no DOM.
   const RENDER_CAP = 60;
 
+  // quantidadeItens/quantidadeTotal/itensResumo podem vir null quando os itens desse
+  // pedido ainda não foram buscados/cacheados no backend (ver MAX_DETAIL_FETCHES_PER_CALL
+  // em pedidosService.js) — nesses casos mostramos um placeholder discreto em vez de
+  // quebrar o card; o conteúdo completa sozinho numa próxima atualização automática.
   function appendOrderCard(ordersEl, pedido) {
     const orderNode = el.orderTemplate.content.cloneNode(true);
     orderNode.querySelector('.order-numero').textContent = `#${pedido.numero}`;
-    orderNode.querySelector('.order-valor').textContent = formatCurrency(pedido.total);
+
+    const itensCountEl = orderNode.querySelector('.order-itens-count');
+    if (typeof pedido.quantidadeItens === 'number') {
+      const rotuloItens = pedido.quantidadeItens === 1 ? 'item' : 'itens';
+      const totalUnidades =
+        typeof pedido.quantidadeTotal === 'number' ? ` (${pedido.quantidadeTotal} un.)` : '';
+      itensCountEl.textContent = `${pedido.quantidadeItens} ${rotuloItens}${totalUnidades}`;
+    } else {
+      itensCountEl.textContent = '…';
+    }
+
     orderNode.querySelector('.order-cliente').textContent = pedido.cliente || '(sem cliente)';
+    orderNode.querySelector('.order-itens-resumo').textContent = pedido.itensResumo || '';
     orderNode.querySelector('.order-data').textContent = formatDateBR(pedido.data);
     ordersEl.appendChild(orderNode);
   }
@@ -140,20 +157,25 @@
     el.columnsGrid.innerHTML = '';
 
     for (const coluna of painel.colunas) {
+      // Filtro de status: só as situações marcadas no seletor "Status" aparecem.
+      if (!state.statusFilter.has(coluna.key)) continue;
+
+      // Colunas sem nenhum pedido (ou sem nenhum pedido que bata com a pesquisa atual)
+      // não ocupam espaço no quadro — só as situações com movimento aparecem.
+      const visiveis = coluna.pedidos.filter((p) => orderMatchesSearch(p, search));
+      if (visiveis.length === 0) continue;
+
       const node = el.columnTemplate.content.cloneNode(true);
       const columnEl = node.querySelector('.status-column');
       const nameEl = node.querySelector('.status-name');
       const countEl = node.querySelector('.status-count');
       const ordersEl = node.querySelector('.status-orders');
-      const emptyMsgEl = node.querySelector('.status-empty-msg');
 
       nameEl.textContent = coluna.label;
       countEl.textContent = coluna.total;
       if (coluna.cor) {
         columnEl.style.setProperty('--status-color', coluna.cor);
       }
-
-      const visiveis = coluna.pedidos.filter((p) => orderMatchesSearch(p, search));
 
       const primeiros = visiveis.slice(0, RENDER_CAP);
       const resto = visiveis.slice(RENDER_CAP);
@@ -174,19 +196,141 @@
         ordersEl.appendChild(showMoreBtn);
       }
 
-      const visibleCount = visiveis.length;
-      if (visibleCount === 0) {
-        emptyMsgEl.classList.remove('hidden');
-        emptyMsgEl.textContent = search
-          ? 'Nenhum pedido encontrado para esta pesquisa.'
-          : 'Nenhum pedido nesta situação.';
-      }
-
       el.columnsGrid.appendChild(node);
+    }
+
+    if (el.columnsGrid.children.length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'no-columns-msg';
+      if (state.statusFilter.size === 0) {
+        msg.textContent = 'Nenhum status selecionado no filtro. Use o botão "Status" para escolher quais mostrar.';
+      } else if (search) {
+        msg.textContent = 'Nenhum pedido encontrado para esta pesquisa.';
+      } else {
+        msg.textContent = 'Nenhum pedido nas situações selecionadas neste período.';
+      }
+      el.columnsGrid.appendChild(msg);
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Filtro de status (multi-seleção)
+  // ---------------------------------------------------------------------
+
+  function updateStatusFilterCount(totalKnown) {
+    const selected = state.statusFilter.size;
+    if (selected === totalKnown) {
+      el.statusFilterCount.classList.add('hidden');
+    } else {
+      el.statusFilterCount.textContent = `${selected}/${totalKnown}`;
+      el.statusFilterCount.classList.remove('hidden');
+    }
+  }
+
+  function onStatusFilterOptionChange() {
+    const checkboxes = el.statusFilterOptions.querySelectorAll('input[type="checkbox"]');
+    const novoFiltro = new Set();
+    checkboxes.forEach((cb) => {
+      if (cb.checked) novoFiltro.add(cb.value);
+    });
+    state.statusFilter = novoFiltro;
+    updateStatusFilterCount(checkboxes.length);
+    if (state.lastPainel) {
+      renderColumns(state.lastPainel);
+    }
+  }
+
+  // Constrói (ou reconstrói, se a lista de situações mudou) a lista de checkboxes do
+  // filtro a partir das colunas retornadas pelo backend — já vêm só com as situações
+  // permitidas (ver situacoesService.js), na ordem fixa configurada.
+  function buildStatusFilterOptions(painel) {
+    const colunas = painel.colunas || [];
+    const keysAtuais = colunas.map((c) => c.key).join('|');
+    if (keysAtuais === state.statusFilterKnownKeys) return;
+
+    const eraPrimeiraVez = state.statusFilterKnownKeys === null;
+    state.statusFilterKnownKeys = keysAtuais;
+
+    // Na primeira carga, começa com tudo selecionado (mesmo comportamento de antes do
+    // filtro existir). Em reconstruções seguintes (ex.: uma nova situação apareceu na
+    // conta Bling), preserva o que o usuário já tinha escolhido e soma a novidade.
+    const selecaoAnterior = state.statusFilter;
+    const novaSelecao = new Set();
+
+    el.statusFilterOptions.innerHTML = '';
+
+    if (colunas.length === 0) {
+      const hint = document.createElement('div');
+      hint.className = 'status-filter-empty-hint';
+      hint.textContent = 'Nenhuma situação disponível ainda.';
+      el.statusFilterOptions.appendChild(hint);
+    }
+
+    for (const coluna of colunas) {
+      const marcado = eraPrimeiraVez || selecaoAnterior.has(coluna.key);
+      if (marcado) novaSelecao.add(coluna.key);
+
+      const label = document.createElement('label');
+      label.className = 'status-filter-option';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = coluna.key;
+      checkbox.checked = marcado;
+
+      const dot = document.createElement('span');
+      dot.className = 'status-filter-dot';
+      if (coluna.cor) dot.style.setProperty('--status-color', coluna.cor);
+
+      const span = document.createElement('span');
+      span.className = 'status-filter-label';
+      span.textContent = coluna.label;
+
+      label.appendChild(checkbox);
+      label.appendChild(dot);
+      label.appendChild(span);
+      el.statusFilterOptions.appendChild(label);
+    }
+
+    state.statusFilter = novaSelecao;
+    updateStatusFilterCount(colunas.length);
+  }
+
+  function openStatusFilterPanel() {
+    el.statusFilterPanel.classList.remove('hidden');
+    el.statusFilterBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeStatusFilterPanel() {
+    el.statusFilterPanel.classList.add('hidden');
+    el.statusFilterBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function onStatusFilterBtnClick(evt) {
+    evt.stopPropagation();
+    if (el.statusFilterPanel.classList.contains('hidden')) {
+      openStatusFilterPanel();
+    } else {
+      closeStatusFilterPanel();
+    }
+  }
+
+  function onDocumentClickCloseStatusFilter(evt) {
+    if (!el.statusFilterGroup.contains(evt.target)) {
+      closeStatusFilterPanel();
+    }
+  }
+
+  function setAllCheckboxes(checked) {
+    const checkboxes = el.statusFilterOptions.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach((cb) => {
+      cb.checked = checked;
+    });
+    onStatusFilterOptionChange();
+  }
+
   function render(painel) {
+    buildStatusFilterOptions(painel);
     renderSummary(painel);
     renderColumns(painel);
     const updatedAt = new Date(painel.atualizadoEm);
@@ -277,23 +421,24 @@
     el.tvModeBtn.innerHTML = on
       ? '<span class="tv-icon">&#10006;</span> Sair do Modo TV'
       : '<span class="tv-icon">&#128250;</span> Modo TV';
-    if (on) {
-      startAutoScroll();
-    } else {
-      stopAutoScroll();
-    }
   }
 
-  // Com até 26 colunas lado a lado, o quadro costuma ficar mais largo que a tela. Como
-  // ninguém vai estar na frente da TV pra rolar manualmente, no Modo TV o quadro rola
-  // sozinho devagar pra direita e, ao chegar no fim, volta pro início.
+  // Com até 26 colunas lado a lado, o quadro costuma ficar mais largo que a tela — a
+  // rolagem automática fica ligada sempre (não só no Modo TV), pra dar tempo de ver
+  // todas as situações mesmo sem ninguém arrastando a tela manualmente.
   const AUTO_SCROLL_STEP_PX = 340; // ~1 coluna por vez
   const AUTO_SCROLL_INTERVAL_MS = 6000;
+
+  // Se alguém estiver de fato na frente da tela mexendo no quadro (mouse/touch), a
+  // rolagem automática dá uma pausa por alguns segundos em vez de brigar com a pessoa.
+  const MANUAL_SCROLL_PAUSE_MS = 8000;
 
   function startAutoScroll() {
     stopAutoScroll();
     state.autoScrollTimer = setInterval(() => {
+      if (Date.now() - state.lastManualScrollAt < MANUAL_SCROLL_PAUSE_MS) return;
       const grid = el.columnsGrid;
+      if (grid.scrollWidth <= grid.clientWidth + 4) return; // tudo já cabe na tela
       const atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 4;
       if (atEnd) {
         grid.scrollTo({ left: 0, behavior: 'smooth' });
@@ -370,6 +515,23 @@
     el.tvModeBtn.addEventListener('click', onTvModeBtnClick);
     document.addEventListener('fullscreenchange', onFullscreenChange);
 
+    el.statusFilterBtn.addEventListener('click', onStatusFilterBtnClick);
+    el.statusFilterOptions.addEventListener('change', onStatusFilterOptionChange);
+    el.statusFilterAllBtn.addEventListener('click', () => setAllCheckboxes(true));
+    el.statusFilterClearBtn.addEventListener('click', () => setAllCheckboxes(false));
+    document.addEventListener('click', onDocumentClickCloseStatusFilter);
+    document.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Escape') closeStatusFilterPanel();
+    });
+
+    // Pausa a rolagem automática enquanto alguém estiver de fato mexendo no quadro.
+    const markManualScroll = () => {
+      state.lastManualScrollAt = Date.now();
+    };
+    el.columnsGrid.addEventListener('wheel', markManualScroll, { passive: true });
+    el.columnsGrid.addEventListener('touchstart', markManualScroll, { passive: true });
+    el.columnsGrid.addEventListener('pointerdown', markManualScroll);
+
     // Abrir o painel com ?tv=1 na URL já entra em Modo TV (sem tela cheia automática,
     // pois navegadores exigem um clique do usuário para isso — mas some com os filtros
     // e deixa pronto para quem for configurar a TV apertar o botão de tela cheia).
@@ -380,6 +542,7 @@
 
     await loadPedidos();
     startPolling();
+    startAutoScroll();
   }
 
   init();
