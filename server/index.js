@@ -12,6 +12,20 @@ const app = express();
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Rede de segurança: se qualquer chamada assíncrona (ex.: ao Upstash ou ao Bling)
+// falhar fora de um try/catch, o Node derrubaria o processo inteiro por padrão a
+// partir da v15 (unhandled rejection) — o que no Render soa como o painel "perder a
+// conexão do nada" a cada erro pontual de rede. Só registramos o erro e seguimos
+// rodando; cada rota já trata seus próprios erros e devolve uma resposta adequada.
+process.on('unhandledRejection', (err) => {
+  // eslint-disable-next-line no-console
+  console.error('[unhandledRejection]', err);
+});
+process.on('uncaughtException', (err) => {
+  // eslint-disable-next-line no-console
+  console.error('[uncaughtException]', err);
+});
+
 // ---------------------------------------------------------------------------
 // OAuth: login, callback, status, logout
 // ---------------------------------------------------------------------------
@@ -66,15 +80,30 @@ app.get('/auth/callback', async (req, res) => {
 });
 
 app.post('/auth/logout', async (req, res) => {
-  await clearTokens();
-  res.json({ ok: true });
+  try {
+    await clearTokens();
+    res.json({ ok: true });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[POST /auth/logout] erro:', err);
+    res.status(502).json({ ok: false, mensagem: 'Não foi possível desconectar agora.' });
+  }
 });
 
 app.get('/api/status', async (req, res) => {
-  res.json({
-    conectado: await bling.isConnected(),
-    pollIntervalSeconds: config.pollIntervalSeconds,
-  });
+  // bling.isConnected() já trata seus próprios erros (ver blingClient.js) e nunca
+  // deveria lançar, mas o try/catch aqui é a última linha de defesa: melhor responder
+  // "não conectado" do que deixar a rota travar sem resposta nenhuma.
+  try {
+    res.json({
+      conectado: await bling.isConnected(),
+      pollIntervalSeconds: config.pollIntervalSeconds,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[GET /api/status] erro:', err);
+    res.json({ conectado: false, pollIntervalSeconds: config.pollIntervalSeconds });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -110,6 +139,42 @@ app.get('/api/pedidos', async (req, res) => {
     res.status(502).json({
       erro: 'FALHA_CONSULTA_BLING',
       mensagem: err.message || 'Não foi possível atualizar os pedidos no momento.',
+    });
+  }
+});
+
+// Detalhe completo de 1 pedido, usado pelo modal de pré-visualização do painel.
+app.get('/api/pedidos/:id', async (req, res) => {
+  if (!(await bling.isConnected())) {
+    res.status(401).json({
+      erro: 'NAO_CONECTADO',
+      mensagem: 'Nenhuma conta Bling conectada. Conecte o aplicativo para visualizar os pedidos.',
+    });
+    return;
+  }
+
+  const id = String(req.params.id || '').trim();
+  if (!/^\d+$/.test(id)) {
+    res.status(400).json({ erro: 'ID_INVALIDO', mensagem: 'Identificador de pedido inválido.' });
+    return;
+  }
+
+  try {
+    const detalhe = await pedidosService.getPedidoDetalhe(id);
+    res.json(detalhe);
+  } catch (err) {
+    if (err instanceof bling.BlingAuthError) {
+      res.status(401).json({
+        erro: 'REAUTENTICACAO_NECESSARIA',
+        mensagem: 'A conexão com o Bling expirou. É necessário reconectar a conta.',
+      });
+      return;
+    }
+    // eslint-disable-next-line no-console
+    console.error(`[GET /api/pedidos/${id}] erro:`, err);
+    res.status(502).json({
+      erro: 'FALHA_CONSULTA_BLING',
+      mensagem: err.message || 'Não foi possível carregar os detalhes deste pedido.',
     });
   }
 });
