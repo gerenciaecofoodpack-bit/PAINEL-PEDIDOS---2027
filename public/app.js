@@ -27,7 +27,10 @@
   };
 
   const state = {
-    periodo: 'todos',
+    // "todos" (todo o histórico) pode ser lento/estourar tempo limite em contas com
+    // muitos pedidos, então o padrão é uma janela mais enxuta; o usuário pode trocar
+    // para "Todo o período" quando quiser no seletor.
+    periodo: '30d',
     de: null,
     ate: null,
     search: '',
