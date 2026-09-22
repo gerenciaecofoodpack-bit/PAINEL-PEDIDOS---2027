@@ -54,10 +54,6 @@
       <div class="summary-label">Status com pedidos</div>
       <div id="summary-status-ativos" class="summary-value">0</div>
     </div>
-    <div class="summary-card">
-      <div class="summary-label">Total de status</div>
-      <div id="summary-status-total" class="summary-value">0</div>
-    </div>
   </section>
 
   <section class="filters-row">
@@ -73,6 +69,22 @@
         <option value="todos">Todo o período (pode demorar)</option>
         <option value="custom">Personalizado...</option>
       </select>
+    </div>
+
+    <div id="status-filter-group" class="status-filter-group">
+      <button id="status-filter-btn" type="button" class="btn btn-small" aria-haspopup="true" aria-expanded="false">
+        Status <span id="status-filter-count" class="status-filter-count hidden"></span>
+        <span class="status-filter-caret">&#9662;</span>
+      </button>
+      <div id="status-filter-panel" class="status-filter-panel hidden">
+        <div class="status-filter-actions">
+          <button id="status-filter-all" type="button" class="link-btn">Marcar todos</button>
+          <button id="status-filter-clear" type="button" class="link-btn">Limpar</button>
+        </div>
+        <div id="status-filter-options" class="status-filter-options">
+          <!-- checkboxes de situação inseridos via JS -->
+        </div>
+      </div>
     </div>
 
     <div id="custom-period-group" class="custom-period-group hidden">
@@ -101,9 +113,10 @@
     <div class="order-card">
       <div class="order-top">
         <span class="order-numero"></span>
-        <span class="order-valor"></span>
+        <span class="order-itens-count"></span>
       </div>
       <div class="order-cliente"></div>
+      <div class="order-itens-resumo"></div>
       <div class="order-data"></div>
     </div>
   </template>
