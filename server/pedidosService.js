@@ -252,4 +252,69 @@ async function getPainelData({ periodo, de, ate }) {
   };
 }
 
-module.exports = { getPainelData };
+// ---------------------------------------------------------------------------
+// Detalhe completo de 1 pedido (usado no modal de pré-visualização do painel).
+// Sempre busca direto na API na hora do clique (não usa o cache de itens acima, que só
+// guarda descrição/quantidade) — assim o modal reflete o pedido mais atualizado.
+// ---------------------------------------------------------------------------
+
+function pickNumber(value) {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && !Number.isNaN(Number(value))) return Number(value);
+  return null;
+}
+
+function formatItemDetalhe(it) {
+  return {
+    descricao: it.descricao || it.descricaoDetalhada || '(sem descrição)',
+    codigo: it.codigo || null,
+    unidade: it.unidade || null,
+    quantidade: pickNumber(it.quantidade),
+    valor: pickNumber(it.valor),
+    desconto: pickNumber(it.desconto),
+  };
+}
+
+// A API do Bling pode ou não preencher alguns destes campos dependendo do pedido/conta
+// (frete, transportadora, observações etc.) — cada um é lido de forma defensiva, e o
+// front-end só exibe a seção correspondente quando o valor realmente existe.
+async function getPedidoDetalhe(idPedidoVenda) {
+  const resp = await bling.apiGet(`/pedidos/vendas/${idPedidoVenda}`);
+  const p = resp.data || {};
+
+  const itens = Array.isArray(p.itens) ? p.itens.map(formatItemDetalhe) : [];
+  const transporte = p.transporte || {};
+  const etiqueta = transporte.etiqueta || transporte.enderecoEntrega || {};
+  const enderecoEntrega = [etiqueta.endereco, etiqueta.numero, etiqueta.complemento, etiqueta.bairro]
+    .filter(Boolean)
+    .join(', ');
+  const cidadeEntrega = [etiqueta.municipio, etiqueta.uf].filter(Boolean).join(' - ');
+
+  return {
+    id: p.id,
+    numero: p.numero,
+    numeroLoja: p.numeroLoja || null,
+    data: p.data || null,
+    dataPrevista: p.dataPrevista && p.dataPrevista !== '0000-00-00' ? p.dataPrevista : null,
+    situacao: p.situacao ? { id: p.situacao.id, nome: p.situacao.valor || null } : null,
+    cliente: {
+      nome: p.contato ? p.contato.nome : null,
+      documento: p.contato ? p.contato.numeroDocumento : null,
+      telefone: p.contato ? p.contato.telefone || p.contato.celular : null,
+      email: p.contato ? p.contato.email : null,
+    },
+    itens,
+    totalProdutos: pickNumber(p.totalProdutos),
+    total: pickNumber(p.total),
+    desconto: p.desconto ? pickNumber(p.desconto.valor) : null,
+    frete: pickNumber(transporte.frete),
+    transportadora:
+      transporte.transportadora && transporte.transportadora.nome ? transporte.transportadora.nome : null,
+    enderecoEntrega: enderecoEntrega || null,
+    cidadeEntrega: cidadeEntrega || null,
+    observacoes: p.observacoes || null,
+    numeroPedidoCompra: p.numeroPedidoCompra || null,
+  };
+}
+
+module.exports = { getPainelData, getPedidoDetalhe };
