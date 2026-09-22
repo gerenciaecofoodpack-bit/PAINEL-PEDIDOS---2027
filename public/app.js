@@ -411,17 +411,24 @@
     }
   }
 
+  // Quando o alerta representa mais de uma coluna (ex.: "Pendência de item" = Fábrica +
+  // Bonsucesso), TODAS as colunas encontradas piscam juntas — não só a primeira. A
+  // rolagem em si leva até a primeira delas, que é o suficiente pra pessoa se orientar.
   function irParaColuna(keys) {
     ensureColunaVisivel(keys);
-    for (const key of keys) {
-      const columnEl = el.columnsGrid.querySelector(`.status-column[data-key="${key}"]`);
-      if (columnEl) {
-        state.lastManualScrollAt = Date.now(); // não briga com a rolagem automática logo em seguida
-        columnEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-        columnEl.classList.add('status-column-highlight');
-        setTimeout(() => columnEl.classList.remove('status-column-highlight'), 2200);
-        return;
-      }
+
+    const encontradas = keys
+      .map((key) => el.columnsGrid.querySelector(`.status-column[data-key="${key}"]`))
+      .filter(Boolean);
+
+    if (encontradas.length === 0) return;
+
+    state.lastManualScrollAt = Date.now(); // não briga com a rolagem automática logo em seguida
+    encontradas[0].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+
+    for (const columnEl of encontradas) {
+      columnEl.classList.add('status-column-highlight');
+      setTimeout(() => columnEl.classList.remove('status-column-highlight'), 2200);
     }
   }
 
