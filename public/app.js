@@ -30,6 +30,9 @@
     statusFilterOptions: document.getElementById('status-filter-options'),
     statusFilterAllBtn: document.getElementById('status-filter-all'),
     statusFilterClearBtn: document.getElementById('status-filter-clear'),
+    pedidoModal: document.getElementById('pedido-modal'),
+    pedidoModalClose: document.getElementById('pedido-modal-close'),
+    pedidoModalContent: document.getElementById('pedido-modal-content'),
   };
 
   const state = {
@@ -54,6 +57,19 @@
     statusFilter: new Set(),
     statusFilterKnownKeys: null, // string com as keys conhecidas, pra saber quando reconstruir o painel de opções
   };
+
+  const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function formatCurrency(value) {
+    if (typeof value !== 'number') return null;
+    return currencyFormatter.format(value);
+  }
+
+  function escapeHtml(str) {
+    return String(str == null ? '' : str).replace(/[&<>"']/g, (ch) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+  }
 
   function formatDateBR(isoDateStr) {
     if (!isoDateStr) return '-';
@@ -134,6 +150,21 @@
   // quebrar o card; o conteúdo completa sozinho numa próxima atualização automática.
   function appendOrderCard(ordersEl, pedido) {
     const orderNode = el.orderTemplate.content.cloneNode(true);
+
+    // O card inteiro é clicável (e navegável por teclado) e abre o modal com o pedido
+    // completo — busca sempre os dados mais atuais na hora do clique, em vez de reusar
+    // o resumo já exibido no quadro.
+    const cardEl = orderNode.querySelector('.order-card');
+    cardEl.setAttribute('role', 'button');
+    cardEl.setAttribute('tabindex', '0');
+    cardEl.addEventListener('click', () => openPedidoModal(pedido.id));
+    cardEl.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        openPedidoModal(pedido.id);
+      }
+    });
+
     orderNode.querySelector('.order-numero').textContent = `#${pedido.numero}`;
 
     const itensCountEl = orderNode.querySelector('.order-itens-count');
@@ -150,6 +181,125 @@
     orderNode.querySelector('.order-itens-resumo').textContent = pedido.itensResumo || '';
     orderNode.querySelector('.order-data').textContent = formatDateBR(pedido.data);
     ordersEl.appendChild(orderNode);
+  }
+
+  // ---------------------------------------------------------------------
+  // Modal de pré-visualização: mostra o pedido completo (itens com valores, cliente,
+  // totais, entrega/frete e observações), buscado direto na API na hora do clique.
+  // ---------------------------------------------------------------------
+
+  function renderPedidoDetalhe(p) {
+    const partes = [];
+
+    partes.push('<div class="modal-header">');
+    partes.push(
+      `<h2>Pedido #${escapeHtml(p.numero)}${
+        p.numeroLoja ? ` <span class="modal-subtle">(loja: ${escapeHtml(p.numeroLoja)})</span>` : ''
+      }</h2>`
+    );
+    if (p.situacao && p.situacao.nome) {
+      partes.push(`<span class="modal-badge">${escapeHtml(p.situacao.nome)}</span>`);
+    }
+    partes.push('</div>');
+
+    partes.push('<div class="modal-section">');
+    partes.push(`<div class="modal-row"><span>Cliente</span><strong>${escapeHtml(p.cliente.nome || '-')}</strong></div>`);
+    if (p.cliente.documento) {
+      partes.push(`<div class="modal-row"><span>Documento</span><strong>${escapeHtml(p.cliente.documento)}</strong></div>`);
+    }
+    if (p.cliente.telefone) {
+      partes.push(`<div class="modal-row"><span>Telefone</span><strong>${escapeHtml(p.cliente.telefone)}</strong></div>`);
+    }
+    if (p.cliente.email) {
+      partes.push(`<div class="modal-row"><span>E-mail</span><strong>${escapeHtml(p.cliente.email)}</strong></div>`);
+    }
+    partes.push(`<div class="modal-row"><span>Data do pedido</span><strong>${formatDateBR(p.data)}</strong></div>`);
+    if (p.dataPrevista) {
+      partes.push(`<div class="modal-row"><span>Previsão</span><strong>${formatDateBR(p.dataPrevista)}</strong></div>`);
+    }
+    if (p.numeroPedidoCompra) {
+      partes.push(`<div class="modal-row"><span>Pedido de compra</span><strong>${escapeHtml(p.numeroPedidoCompra)}</strong></div>`);
+    }
+    partes.push('</div>');
+
+    partes.push('<div class="modal-section"><h3>Itens</h3><div class="modal-itens">');
+    if (p.itens.length === 0) {
+      partes.push('<div class="modal-subtle">Nenhum item encontrado.</div>');
+    }
+    for (const item of p.itens) {
+      const valorUnit = formatCurrency(item.valor);
+      const qtd = item.quantidade != null ? item.quantidade : '-';
+      partes.push('<div class="modal-item-row">');
+      partes.push(`<div class="modal-item-desc">${escapeHtml(item.descricao)}</div>`);
+      partes.push(
+        `<div class="modal-item-meta"><span>Qtd: ${escapeHtml(qtd)}${
+          item.unidade ? ` ${escapeHtml(item.unidade)}` : ''
+        }</span>${valorUnit ? `<span>${valorUnit} un.</span>` : ''}</div>`
+      );
+      partes.push('</div>');
+    }
+    partes.push('</div></div>');
+
+    const totalRows = [];
+    if (p.totalProdutos != null) {
+      totalRows.push(`<div class="modal-row"><span>Total dos produtos</span><strong>${formatCurrency(p.totalProdutos)}</strong></div>`);
+    }
+    if (p.frete != null) {
+      totalRows.push(`<div class="modal-row"><span>Frete</span><strong>${formatCurrency(p.frete)}</strong></div>`);
+    }
+    if (p.desconto != null && p.desconto > 0) {
+      totalRows.push(`<div class="modal-row"><span>Desconto</span><strong>${formatCurrency(p.desconto)}</strong></div>`);
+    }
+    if (p.total != null) {
+      totalRows.push(`<div class="modal-row modal-row-total"><span>Total do pedido</span><strong>${formatCurrency(p.total)}</strong></div>`);
+    }
+    if (totalRows.length > 0) {
+      partes.push(`<div class="modal-section">${totalRows.join('')}</div>`);
+    }
+
+    if (p.transportadora || p.enderecoEntrega) {
+      partes.push('<div class="modal-section"><h3>Entrega</h3>');
+      if (p.transportadora) {
+        partes.push(`<div class="modal-row"><span>Transportadora</span><strong>${escapeHtml(p.transportadora)}</strong></div>`);
+      }
+      if (p.enderecoEntrega) {
+        partes.push(`<div class="modal-row"><span>Endereço</span><strong>${escapeHtml(p.enderecoEntrega)}</strong></div>`);
+      }
+      if (p.cidadeEntrega) {
+        partes.push(`<div class="modal-row"><span>Cidade</span><strong>${escapeHtml(p.cidadeEntrega)}</strong></div>`);
+      }
+      partes.push('</div>');
+    }
+
+    if (p.observacoes) {
+      partes.push(`<div class="modal-section"><h3>Observações</h3><p class="modal-obs">${escapeHtml(p.observacoes)}</p></div>`);
+    }
+
+    return partes.join('');
+  }
+
+  async function openPedidoModal(id) {
+    el.pedidoModal.classList.remove('hidden');
+    el.pedidoModalContent.innerHTML = '<div class="modal-loading">Carregando pedido...</div>';
+    stopAutoScroll();
+    try {
+      const detalhe = await fetchJson(`/api/pedidos/${id}`);
+      // Se a pessoa já fechou o modal antes da resposta chegar, não sobrescreve nada.
+      if (el.pedidoModal.classList.contains('hidden')) return;
+      el.pedidoModalContent.innerHTML = renderPedidoDetalhe(detalhe);
+    } catch (err) {
+      if (el.pedidoModal.classList.contains('hidden')) return;
+      el.pedidoModalContent.innerHTML = `<div class="modal-error">Não foi possível carregar este pedido: ${escapeHtml(
+        err.message || 'erro desconhecido'
+      )}</div>`;
+    }
+  }
+
+  function closePedidoModal() {
+    if (el.pedidoModal.classList.contains('hidden')) return;
+    el.pedidoModal.classList.add('hidden');
+    el.pedidoModalContent.innerHTML = '';
+    startAutoScroll();
   }
 
   function renderColumns(painel) {
@@ -528,8 +678,16 @@
     el.statusFilterAllBtn.addEventListener('click', () => setAllCheckboxes(true));
     el.statusFilterClearBtn.addEventListener('click', () => setAllCheckboxes(false));
     document.addEventListener('click', onDocumentClickCloseStatusFilter);
+
+    el.pedidoModalClose.addEventListener('click', closePedidoModal);
+    el.pedidoModal.addEventListener('click', (evt) => {
+      if (evt.target === el.pedidoModal) closePedidoModal();
+    });
     document.addEventListener('keydown', (evt) => {
-      if (evt.key === 'Escape') closeStatusFilterPanel();
+      if (evt.key === 'Escape') {
+        closeStatusFilterPanel();
+        closePedidoModal();
+      }
     });
 
     // Pausa a rolagem automática enquanto alguém estiver de fato mexendo no quadro.
