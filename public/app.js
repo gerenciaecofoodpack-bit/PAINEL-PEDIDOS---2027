@@ -271,24 +271,28 @@
     for (const item of p.itens) {
       const valorUnit = formatCurrency(item.valor);
       const qtd = item.quantidade != null ? item.quantidade : '-';
-      const estoqueNegativo = typeof item.estoqueAtual === 'number' && item.estoqueAtual < 0;
+      // Destaca o item quando o estoque físico atual está zerado OU negativo (pedido do
+      // usuário: "se o estoque estiver zerado ele destaque pra mim o item").
+      const estoqueCritico = typeof item.estoqueAtual === 'number' && item.estoqueAtual <= 0;
       const estoqueSpan =
         typeof item.estoqueAtual === 'number'
-          ? `<span class="${estoqueNegativo ? 'modal-item-estoque-negativo' : ''}">Estoque: ${escapeHtml(
+          ? `<span class="${estoqueCritico ? 'modal-item-estoque-negativo' : ''}">Estoque: ${escapeHtml(
               item.estoqueAtual
             )}</span>`
           : '';
-      partes.push(`<div class="modal-item-row${estoqueNegativo ? ' modal-item-row-negativo' : ''}">`);
+      partes.push(`<div class="modal-item-row${estoqueCritico ? ' modal-item-row-negativo' : ''}">`);
       partes.push(`<div class="modal-item-desc">${escapeHtml(item.descricao)}</div>`);
       partes.push(
         `<div class="modal-item-meta"><span>Qtd: ${escapeHtml(qtd)}${
           item.unidade ? ` ${escapeHtml(item.unidade)}` : ''
         }</span>${valorUnit ? `<span>${valorUnit} un.</span>` : ''}${estoqueSpan}</div>`
       );
-      if (estoqueNegativo) {
-        partes.push(
-          '<div class="modal-item-alert">&#9888;&#65039; Estoque atual negativo — confira antes de separar este item.</div>'
-        );
+      if (estoqueCritico) {
+        const msg =
+          item.estoqueAtual === 0
+            ? 'Estoque atual zerado — confira antes de separar este item.'
+            : 'Estoque atual negativo — confira antes de separar este item.';
+        partes.push(`<div class="modal-item-alert">&#9888;&#65039; ${msg}</div>`);
       }
       partes.push('</div>');
     }
