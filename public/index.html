@@ -95,6 +95,10 @@
       </div>
     </div>
 
+    <button id="reset-column-order-btn" type="button" class="btn btn-small" title="Restaurar a ordem padrão das colunas">
+      Ordem padrão
+    </button>
+
     <div id="custom-period-group" class="custom-period-group hidden">
       <label>De <input id="date-from" type="date" /></label>
       <label>Até <input id="date-to" type="date" /></label>
@@ -109,6 +113,7 @@
   <template id="column-template">
     <div class="status-column">
       <div class="status-header">
+        <span class="status-drag-handle" title="Arraste para reordenar as colunas">&#9776;</span>
         <div class="status-name"></div>
         <div class="status-count">0</div>
       </div>

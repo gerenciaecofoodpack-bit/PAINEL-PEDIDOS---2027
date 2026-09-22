@@ -39,7 +39,31 @@
     pedidoModal: document.getElementById('pedido-modal'),
     pedidoModalClose: document.getElementById('pedido-modal-close'),
     pedidoModalContent: document.getElementById('pedido-modal-content'),
+    resetColumnOrderBtn: document.getElementById('reset-column-order-btn'),
   };
+
+  // Ordem das colunas escolhida pela pessoa (arrastar e soltar) fica salva no navegador
+  // — cada dispositivo/TV guarda a própria ordem preferida.
+  const COLUMN_ORDER_STORAGE_KEY = 'blingPainelColumnOrder';
+
+  function loadColumnOrder() {
+    try {
+      const raw = localStorage.getItem(COLUMN_ORDER_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed.filter((k) => typeof k === 'string') : [];
+    } catch {
+      return []; // modo privado, localStorage bloqueado etc. — só não persiste entre sessões
+    }
+  }
+
+  function saveColumnOrder(order) {
+    try {
+      localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(order));
+    } catch {
+      // idem acima — a ordem escolhida continua valendo nesta sessão, só não é lembrada
+      // na próxima vez que a página carregar.
+    }
+  }
 
   const state = {
     // "todos" (todo o histórico) pode ser lento/estourar tempo limite em contas com
@@ -56,6 +80,8 @@
     pollTimer: null,
     autoScrollTimer: null,
     lastManualScrollAt: 0,
+    columnOrder: loadColumnOrder(),
+    allColumnKeys: [],
     // Filtro de status (multi-seleção): conjunto das "key" de coluna que devem aparecer
     // no quadro. É inicializado com todas as situações assim que a primeira resposta do
     // backend chega (equivalente a "sem filtro"/mostrar tudo, igual ao comportamento
@@ -318,11 +344,130 @@
     startAutoScroll();
   }
 
+  // ---------------------------------------------------------------------
+  // Arrastar e soltar para reordenar as colunas do quadro (ver a alça ☰ no cabeçalho de
+  // cada coluna). A ordem escolhida é salva no navegador (COLUMN_ORDER_STORAGE_KEY).
+  // ---------------------------------------------------------------------
+
+  let draggedColumnKey = null;
+
+  // Entre as colunas visíveis no momento, acha depois de qual delas o mouse está —
+  // técnica padrão de reordenação por arrastar-e-soltar (compara o centro de cada coluna
+  // com a posição horizontal do cursor).
+  function getColumnAfterPoint(x) {
+    const columns = [...el.columnsGrid.querySelectorAll('.status-column:not(.dragging)')];
+    let closest = { offset: -Infinity, element: null };
+    for (const child of columns) {
+      const box = child.getBoundingClientRect();
+      const offset = x - box.left - box.width / 2;
+      if (offset < 0 && offset > closest.offset) {
+        closest = { offset, element: child };
+      }
+    }
+    return closest.element;
+  }
+
+  function onColumnDragStart(evt) {
+    const columnEl = evt.currentTarget;
+    // Só inicia o arraste se o gesto começou na alça — clicar/arrastar em qualquer
+    // outro ponto da coluna (ex.: rolando a lista de pedidos) não deve mover a coluna.
+    if (!evt.target.closest('.status-drag-handle')) {
+      evt.preventDefault();
+      return;
+    }
+    draggedColumnKey = columnEl.dataset.key;
+    columnEl.classList.add('dragging');
+    evt.dataTransfer.effectAllowed = 'move';
+    evt.dataTransfer.setData('text/plain', draggedColumnKey || '');
+    stopAutoScroll();
+  }
+
+  function onColumnDragEnd(evt) {
+    evt.currentTarget.classList.remove('dragging');
+    if (draggedColumnKey) {
+      persistDomColumnOrder();
+    }
+    draggedColumnKey = null;
+    startAutoScroll();
+  }
+
+  function onColumnsGridDragOver(evt) {
+    if (!draggedColumnKey) return;
+    evt.preventDefault();
+    evt.dataTransfer.dropEffect = 'move';
+    const dragging = el.columnsGrid.querySelector('.status-column.dragging');
+    if (!dragging) return;
+    const afterEl = getColumnAfterPoint(evt.clientX);
+    if (afterEl == null) {
+      el.columnsGrid.appendChild(dragging);
+    } else if (afterEl !== dragging) {
+      el.columnsGrid.insertBefore(dragging, afterEl);
+    }
+  }
+
+  // Salva a nova ordem completa (state.columnOrder guarda TODAS as situações, não só as
+  // visíveis no momento) — mistura a nova ordem visual das colunas que estavam na tela
+  // com a posição relativa das que estavam escondidas (filtro de status/pesquisa ativos),
+  // pra não perder a organização delas quando reaparecerem.
+  function persistDomColumnOrder() {
+    const visibleKeysNewOrder = [...el.columnsGrid.querySelectorAll('.status-column')].map(
+      (c) => c.dataset.key
+    );
+    const visibleSet = new Set(visibleKeysNewOrder);
+    const baseOrder =
+      state.columnOrder && state.columnOrder.length > 0 ? state.columnOrder : state.allColumnKeys;
+
+    const fila = [...visibleKeysNewOrder];
+    const novaOrdem = [];
+    const jaColocadas = new Set();
+
+    for (const key of baseOrder) {
+      if (visibleSet.has(key)) {
+        if (fila.length > 0) {
+          const proxima = fila.shift();
+          novaOrdem.push(proxima);
+          jaColocadas.add(proxima);
+        }
+      } else {
+        novaOrdem.push(key);
+        jaColocadas.add(key);
+      }
+    }
+    // Situações que por algum motivo não estavam na ordem base (ex.: primeiro uso)
+    // entram no fim, preservando a ordem em que o backend as enviou.
+    for (const key of state.allColumnKeys) {
+      if (!jaColocadas.has(key)) novaOrdem.push(key);
+    }
+
+    state.columnOrder = novaOrdem;
+    saveColumnOrder(novaOrdem);
+  }
+
+  // Aplica a ordem que a pessoa escolheu arrastando as colunas (se houver). Situações
+  // que ainda não foram reordenadas manualmente entram no final, na ordem padrão vinda
+  // do backend.
+  function ordenarColunasConformePreferencia(colunas) {
+    if (!state.columnOrder || state.columnOrder.length === 0) return colunas;
+    const porKey = new Map(colunas.map((c) => [c.key, c]));
+    const ordenado = [];
+    for (const key of state.columnOrder) {
+      const coluna = porKey.get(key);
+      if (coluna) {
+        ordenado.push(coluna);
+        porKey.delete(key);
+      }
+    }
+    for (const coluna of colunas) {
+      if (porKey.has(coluna.key)) ordenado.push(coluna);
+    }
+    return ordenado;
+  }
+
   function renderColumns(painel) {
     const search = state.search.trim();
     el.columnsGrid.innerHTML = '';
 
-    for (const coluna of painel.colunas) {
+    for (const coluna of ordenarColunasConformePreferencia(painel.colunas)) {
       // Filtro de status: só as situações marcadas no seletor "Status" aparecem.
       if (!state.statusFilter.has(coluna.key)) continue;
 
@@ -340,6 +485,12 @@
       nameEl.textContent = coluna.label;
       countEl.textContent = coluna.total;
       columnEl.dataset.key = coluna.key;
+      // Arrastar e soltar: a alça (☰) no cabeçalho é o único ponto que inicia o arraste
+      // (ver onColumnDragStart) — assim rolar a lista de pedidos dentro da coluna
+      // continua funcionando normalmente.
+      columnEl.draggable = true;
+      columnEl.addEventListener('dragstart', onColumnDragStart);
+      columnEl.addEventListener('dragend', onColumnDragEnd);
       if (coluna.cor) {
         columnEl.style.setProperty('--status-color', coluna.cor);
       }
@@ -466,7 +617,11 @@
   // permitidas (ver situacoesService.js), na ordem fixa configurada.
   function buildStatusFilterOptions(painel) {
     const colunas = painel.colunas || [];
-    const keysAtuais = colunas.map((c) => c.key).join('|');
+    // Sempre atualizado (independente do "return" abaixo), pra reordenação por
+    // arrastar-e-soltar sempre saber o conjunto completo de situações existentes.
+    state.allColumnKeys = colunas.map((c) => c.key);
+
+    const keysAtuais = state.allColumnKeys.join('|');
     if (keysAtuais === state.statusFilterKnownKeys) return;
 
     const eraPrimeiraVez = state.statusFilterKnownKeys === null;
@@ -769,6 +924,15 @@
         evt.preventDefault();
         onAlertPendenciaActivate();
       }
+    });
+
+    el.columnsGrid.addEventListener('dragover', onColumnsGridDragOver);
+    el.columnsGrid.addEventListener('drop', (evt) => evt.preventDefault());
+
+    el.resetColumnOrderBtn.addEventListener('click', () => {
+      state.columnOrder = [];
+      saveColumnOrder([]);
+      if (state.lastPainel) renderColumns(state.lastPainel);
     });
 
     el.statusFilterBtn.addEventListener('click', onStatusFilterBtnClick);

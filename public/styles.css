@@ -390,6 +390,22 @@ button {
   background: var(--surface-alt);
   border-top: 4px solid var(--status-color, var(--primary));
 }
+.status-drag-handle {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: grab;
+  padding: 2px 2px 2px 0;
+  line-height: 1;
+}
+.status-drag-handle:active { cursor: grabbing; }
+
+/* Enquanto uma coluna está sendo arrastada, ela fica meio transparente no lugar de
+   origem — o "espaço" que se move de verdade é o próprio elemento (ver app.js). */
+.status-column.dragging {
+  opacity: 0.35;
+}
+
 .status-header::before {
   content: '';
   flex: 0 0 auto;
