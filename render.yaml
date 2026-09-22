@@ -1,0 +1,37 @@
+# Blueprint do Render (https://render.com), plano gratuito.
+#
+# No plano free o Render não oferece disco persistente nem o fluxo "Blueprint" completo em
+# todas as contas — por isso o README recomenda criar o serviço manualmente via
+# "New +" -> "Web Service" em vez de usar este arquivo. Ele fica aqui como referência/atalho
+# caso sua conta permita "New +" -> "Blueprint".
+#
+# Sem disco, o token de acesso ao Bling é perdido a cada reinício/spin-down do serviço
+# gratuito, a menos que você configure UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN
+# (veja o README, seção "Plano gratuito do Render") para guardar o token num Redis grátis
+# externo em vez do disco local.
+
+services:
+  - type: web
+    name: bling-painel
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/status
+    envVars:
+      - key: POLL_INTERVAL_SECONDS
+        value: 30
+      - key: BLING_CLIENT_ID
+        sync: false
+      - key: BLING_CLIENT_SECRET
+        sync: false
+      - key: BLING_REDIRECT_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      # Opcionais — só preencha se for usar Upstash Redis para persistir o token
+      # gratuitamente entre reinícios (veja o README):
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

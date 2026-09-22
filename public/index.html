@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Painel de Pedidos — Bling</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div id="connect-screen" class="connect-screen hidden">
+  <div class="connect-box">
+    <h1>Painel de Pedidos</h1>
+    <p>Este painel ainda não está conectado à sua conta Bling.</p>
+    <a id="connect-btn" class="btn btn-primary" href="/auth/login">Conectar ao Bling</a>
+    <p class="connect-hint">Você será redirecionado ao Bling para autorizar o acesso somente leitura aos pedidos de venda.</p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+
+  <header class="topbar">
+    <div class="topbar-title">
+      <h1>Painel de Pedidos</h1>
+      <span id="last-update" class="last-update">Última atualização: --:--:--</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="refresh-btn" class="btn btn-secondary" title="Atualizar agora">
+        <span class="refresh-icon">&#8635;</span> Atualizar agora
+      </button>
+      <button id="tv-mode-btn" class="btn btn-secondary" title="Ocultar controles e entrar em tela cheia (ideal para TV)">
+        <span class="tv-icon">&#128250;</span> Modo TV
+      </button>
+    </div>
+  </header>
+
+  <div id="error-banner" class="error-banner hidden">
+    <span class="error-icon">&#9888;</span>
+    <span id="error-message">Não foi possível atualizar os pedidos.</span>
+    <span id="error-last-valid"></span>
+    <button id="retry-btn" class="btn btn-small">Tentar novamente</button>
+  </div>
+
+  <section class="summary-row">
+    <div class="summary-card">
+      <div class="summary-label">Total de pedidos</div>
+      <div id="summary-total" class="summary-value">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Pedidos hoje</div>
+      <div id="summary-hoje" class="summary-value">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Status com pedidos</div>
+      <div id="summary-status-ativos" class="summary-value">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Total de status</div>
+      <div id="summary-status-total" class="summary-value">0</div>
+    </div>
+  </section>
+
+  <section class="filters-row">
+    <input id="search-input" class="search-input" type="text" placeholder="Pesquisar pedido ou cliente..." />
+
+    <div class="period-group">
+      <label for="period-select">Período:</label>
+      <select id="period-select">
+        <option value="todos">Todo o período</option>
+        <option value="hoje">Hoje</option>
+        <option value="ontem">Ontem</option>
+        <option value="7d">Últimos 7 dias</option>
+        <option value="30d">Últimos 30 dias</option>
+        <option value="custom">Personalizado...</option>
+      </select>
+    </div>
+
+    <div id="custom-period-group" class="custom-period-group hidden">
+      <label>De <input id="date-from" type="date" /></label>
+      <label>Até <input id="date-to" type="date" /></label>
+      <button id="apply-custom-period" class="btn btn-small">Aplicar</button>
+    </div>
+  </section>
+
+  <main id="columns-grid" class="columns-grid">
+    <!-- colunas de status inseridas via JS -->
+  </main>
+
+  <template id="column-template">
+    <div class="status-column">
+      <div class="status-header">
+        <div class="status-name"></div>
+        <div class="status-count">0</div>
+      </div>
+      <div class="status-orders"></div>
+      <div class="status-empty-msg hidden">Nenhum pedido nesta situação.</div>
+    </div>
+  </template>
+
+  <template id="order-template">
+    <div class="order-card">
+      <div class="order-top">
+        <span class="order-numero"></span>
+        <span class="order-valor"></span>
+      </div>
+      <div class="order-cliente"></div>
+      <div class="order-data"></div>
+    </div>
+  </template>
+
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
