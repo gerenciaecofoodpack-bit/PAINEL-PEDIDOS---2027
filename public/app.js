@@ -337,6 +337,7 @@
 
       nameEl.textContent = coluna.label;
       countEl.textContent = coluna.total;
+      columnEl.dataset.key = coluna.key;
       if (coluna.cor) {
         columnEl.style.setProperty('--status-color', coluna.cor);
       }
@@ -374,6 +375,53 @@
         msg.textContent = 'Nenhum pedido nas situações selecionadas neste período.';
       }
       el.columnsGrid.appendChild(msg);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Navegação dos "balões" de alerta: leva até a coluna do pedido em questão. Se a
+  // pesquisa ou o filtro de status estiverem escondendo aquela coluna no momento, ajusta
+  // os dois primeiro (limpa a pesquisa, marca a situação no filtro) pra garantir que a
+  // coluna realmente apareça antes de rolar até ela.
+  // ---------------------------------------------------------------------
+
+  function ensureColunaVisivel(keys) {
+    let mudou = false;
+
+    if (state.search) {
+      state.search = '';
+      el.searchInput.value = '';
+      mudou = true;
+    }
+
+    for (const key of keys) {
+      if (!state.statusFilter.has(key)) {
+        state.statusFilter.add(key);
+        mudou = true;
+        const checkbox = el.statusFilterOptions.querySelector(
+          `input[type="checkbox"][value="${key}"]`
+        );
+        if (checkbox) checkbox.checked = true;
+        updateStatusFilterCount(el.statusFilterOptions.querySelectorAll('input[type="checkbox"]').length);
+      }
+    }
+
+    if (mudou && state.lastPainel) {
+      renderColumns(state.lastPainel);
+    }
+  }
+
+  function irParaColuna(keys) {
+    ensureColunaVisivel(keys);
+    for (const key of keys) {
+      const columnEl = el.columnsGrid.querySelector(`.status-column[data-key="${key}"]`);
+      if (columnEl) {
+        state.lastManualScrollAt = Date.now(); // não briga com a rolagem automática logo em seguida
+        columnEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        columnEl.classList.add('status-column-highlight');
+        setTimeout(() => columnEl.classList.remove('status-column-highlight'), 2200);
+        return;
+      }
     }
   }
 
@@ -686,6 +734,26 @@
     el.searchInput.addEventListener('input', onSearchInput);
     el.tvModeBtn.addEventListener('click', onTvModeBtnClick);
     document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    // Alertas do topo: clicar leva até a(s) coluna(s) correspondente(s) no quadro.
+    const KEYS_EM_ABERTO = ['Em aberto'];
+    const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
+    const onAlertAbertoActivate = () => irParaColuna(KEYS_EM_ABERTO);
+    const onAlertPendenciaActivate = () => irParaColuna(KEYS_PENDENCIA_ITEM);
+    el.alertAbertoVencido.addEventListener('click', onAlertAbertoActivate);
+    el.alertAbertoVencido.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        onAlertAbertoActivate();
+      }
+    });
+    el.alertPendenciaItem.addEventListener('click', onAlertPendenciaActivate);
+    el.alertPendenciaItem.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        onAlertPendenciaActivate();
+      }
+    });
 
     el.statusFilterBtn.addEventListener('click', onStatusFilterBtnClick);
     el.statusFilterOptions.addEventListener('change', onStatusFilterOptionChange);
