@@ -303,7 +303,38 @@ function formatItemDetalhe(it) {
     quantidade: pickNumber(it.quantidade),
     valor: pickNumber(it.valor),
     desconto: pickNumber(it.desconto),
+    produtoId: it.produto ? it.produto.id : null,
+    // Preenchido logo abaixo, em getPedidoDetalhe, com uma chamada separada à API de
+    // estoque — null aqui significa "ainda não buscado" ou "não foi possível obter".
+    estoqueAtual: null,
   };
+}
+
+// Busca o saldo físico atual (estoque real, não o "virtual" que desconta reservas) de
+// cada produto dos itens do pedido, numa única chamada em lote à API de estoque do
+// Bling. Só é chamada aqui — na hora que a pessoa abre o modal de um pedido — nunca na
+// listagem do quadro, que já teria centenas de pedidos × itens a cada atualização
+// automática de 30s.
+async function preencherEstoqueDosItens(itens) {
+  const idsProdutos = [...new Set(itens.map((it) => it.produtoId).filter((id) => id != null))];
+  if (idsProdutos.length === 0) return;
+
+  try {
+    const resp = await bling.apiGet('/estoques/saldos', { 'idsProdutos[]': idsProdutos });
+    const saldoPorProduto = new Map(
+      (resp.data || []).map((s) => [s.produto ? s.produto.id : null, pickNumber(s.saldoFisicoTotal)])
+    );
+    for (const item of itens) {
+      if (item.produtoId != null && saldoPorProduto.has(item.produtoId)) {
+        item.estoqueAtual = saldoPorProduto.get(item.produtoId);
+      }
+    }
+  } catch (err) {
+    // Não derruba o modal inteiro por causa do estoque (ex.: escopo "Estoque" não
+    // habilitado no app do Bling) — os itens só ficam sem essa informação.
+    // eslint-disable-next-line no-console
+    console.warn(`[preencherEstoqueDosItens] Falha ao buscar saldo de estoque: ${err.message}`);
+  }
 }
 
 // A API do Bling pode ou não preencher alguns destes campos dependendo do pedido/conta
@@ -314,6 +345,7 @@ async function getPedidoDetalhe(idPedidoVenda) {
   const p = resp.data || {};
 
   const itens = Array.isArray(p.itens) ? p.itens.map(formatItemDetalhe) : [];
+  await preencherEstoqueDosItens(itens);
   const transporte = p.transporte || {};
   const etiqueta = transporte.etiqueta || transporte.enderecoEntrega || {};
   const enderecoEntrega = [etiqueta.endereco, etiqueta.numero, etiqueta.complemento, etiqueta.bairro]
