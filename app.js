@@ -39,6 +39,7 @@
     pollIntervalSeconds: 30,
     fetching: false,
     pollTimer: null,
+    autoScrollTimer: null,
   };
 
   const currencyFormatter = new Intl.NumberFormat('pt-BR', {
@@ -120,6 +121,20 @@
     return numero.includes(term) || cliente.includes(term);
   }
 
+  // Colunas com muitos pedidos (ex.: "Nota fiscal emitida" acumulando centenas) só
+  // renderizam esse tanto de cards de cara — o resto vem sob demanda, pra não deixar o
+  // navegador pesado com milhares de nós no DOM.
+  const RENDER_CAP = 60;
+
+  function appendOrderCard(ordersEl, pedido) {
+    const orderNode = el.orderTemplate.content.cloneNode(true);
+    orderNode.querySelector('.order-numero').textContent = `#${pedido.numero}`;
+    orderNode.querySelector('.order-valor').textContent = formatCurrency(pedido.total);
+    orderNode.querySelector('.order-cliente').textContent = pedido.cliente || '(sem cliente)';
+    orderNode.querySelector('.order-data').textContent = formatDateBR(pedido.data);
+    ordersEl.appendChild(orderNode);
+  }
+
   function renderColumns(painel) {
     const search = state.search.trim();
     el.columnsGrid.innerHTML = '';
@@ -137,24 +152,29 @@
       if (coluna.cor) {
         columnEl.style.setProperty('--status-color', coluna.cor);
       }
-      if (coluna.naoMapeada) {
-        columnEl.style.setProperty('--status-color', '#c0392b');
+
+      const visiveis = coluna.pedidos.filter((p) => orderMatchesSearch(p, search));
+
+      const primeiros = visiveis.slice(0, RENDER_CAP);
+      const resto = visiveis.slice(RENDER_CAP);
+      for (const pedido of primeiros) {
+        appendOrderCard(ordersEl, pedido);
+      }
+      if (resto.length > 0) {
+        const showMoreBtn = document.createElement('button');
+        showMoreBtn.type = 'button';
+        showMoreBtn.className = 'show-more-btn';
+        showMoreBtn.textContent = `Mostrar mais ${resto.length} pedido${resto.length === 1 ? '' : 's'}`;
+        showMoreBtn.addEventListener('click', () => {
+          for (const pedido of resto) {
+            appendOrderCard(ordersEl, pedido);
+          }
+          showMoreBtn.remove();
+        });
+        ordersEl.appendChild(showMoreBtn);
       }
 
-      let visibleCount = 0;
-      for (const pedido of coluna.pedidos) {
-        const matches = orderMatchesSearch(pedido, search);
-        if (!matches) continue;
-        visibleCount += 1;
-
-        const orderNode = el.orderTemplate.content.cloneNode(true);
-        orderNode.querySelector('.order-numero').textContent = `#${pedido.numero}`;
-        orderNode.querySelector('.order-valor').textContent = formatCurrency(pedido.total);
-        orderNode.querySelector('.order-cliente').textContent = pedido.cliente || '(sem cliente)';
-        orderNode.querySelector('.order-data').textContent = formatDateBR(pedido.data);
-        ordersEl.appendChild(orderNode);
-      }
-
+      const visibleCount = visiveis.length;
       if (visibleCount === 0) {
         emptyMsgEl.classList.remove('hidden');
         emptyMsgEl.textContent = search
@@ -257,6 +277,37 @@
     el.tvModeBtn.innerHTML = on
       ? '<span class="tv-icon">&#10006;</span> Sair do Modo TV'
       : '<span class="tv-icon">&#128250;</span> Modo TV';
+    if (on) {
+      startAutoScroll();
+    } else {
+      stopAutoScroll();
+    }
+  }
+
+  // Com até 26 colunas lado a lado, o quadro costuma ficar mais largo que a tela. Como
+  // ninguém vai estar na frente da TV pra rolar manualmente, no Modo TV o quadro rola
+  // sozinho devagar pra direita e, ao chegar no fim, volta pro início.
+  const AUTO_SCROLL_STEP_PX = 340; // ~1 coluna por vez
+  const AUTO_SCROLL_INTERVAL_MS = 6000;
+
+  function startAutoScroll() {
+    stopAutoScroll();
+    state.autoScrollTimer = setInterval(() => {
+      const grid = el.columnsGrid;
+      const atEnd = grid.scrollLeft + grid.clientWidth >= grid.scrollWidth - 4;
+      if (atEnd) {
+        grid.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        grid.scrollBy({ left: AUTO_SCROLL_STEP_PX, behavior: 'smooth' });
+      }
+    }, AUTO_SCROLL_INTERVAL_MS);
+  }
+
+  function stopAutoScroll() {
+    if (state.autoScrollTimer) {
+      clearInterval(state.autoScrollTimer);
+      state.autoScrollTimer = null;
+    }
   }
 
   async function enterTvMode() {
