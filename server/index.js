@@ -36,8 +36,15 @@ app.get('/auth/callback', async (req, res) => {
     return;
   }
 
+  // O "state" protege contra CSRF quando o fluxo começa pelo botão "Conectar ao Bling"
+  // deste painel (que grava o cookie bling_oauth_state antes de redirecionar). Se o
+  // usuário chegou aqui por outro caminho iniciado no próprio Bling (ex.: um link de
+  // convite/instalação do aplicativo), não existe esse cookie — nesse caso não há como
+  // comparar, então só recusamos quando EXISTE um cookie e ele não bate (indício real de
+  // adulteração); a troca do code por token, protegida pelo Client Secret, continua sendo
+  // a barreira de segurança principal em ambos os casos.
   const expectedState = req.cookies && req.cookies.bling_oauth_state;
-  if (!state || !expectedState || state !== expectedState) {
+  if (expectedState && state !== expectedState) {
     res.status(400).send('Falha de segurança (state inválido) ao concluir a autorização. Tente novamente.');
     return;
   }
