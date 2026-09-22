@@ -113,8 +113,18 @@ async function getValidAccessToken({ forceRefresh = false } = {}) {
 }
 
 async function isConnected() {
-  const tokens = await tokenStore.getTokens();
-  return Boolean(tokens && tokens.accessToken && tokens.refreshToken);
+  try {
+    const tokens = await tokenStore.getTokens();
+    return Boolean(tokens && tokens.accessToken && tokens.refreshToken);
+  } catch (err) {
+    // Se o armazenamento do token falhar ao responder (ex.: Upstash fora do ar ou
+    // configurado errado), tratamos como "não conectado" em vez de deixar o erro
+    // derrubar a rota que chamou isConnected() — evita crash do servidor inteiro por
+    // causa de uma falha pontual num serviço externo.
+    // eslint-disable-next-line no-console
+    console.error('[isConnected] Falha ao consultar o armazenamento do token:', err.message);
+    return false;
+  }
 }
 
 // Executa um GET autenticado contra a API do Bling, com throttle, retry em 429

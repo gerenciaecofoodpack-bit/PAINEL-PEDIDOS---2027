@@ -63,16 +63,26 @@ function clearTokensFromFile() {
 
 async function upstashCommand(pathSegments, body) {
   const url = `${UPSTASH_URL.replace(/\/$/, '')}/${pathSegments.map(encodeURIComponent).join('/')}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${UPSTASH_TOKEN}`,
-      ...(body !== undefined ? { 'Content-Type': 'text/plain' } : {}),
-    },
-    body,
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${UPSTASH_TOKEN}`,
+        ...(body !== undefined ? { 'Content-Type': 'text/plain' } : {}),
+      },
+      body,
+    });
+  } catch (err) {
+    // Falha de rede ao falar com o Upstash (fora do ar, DNS, etc.) — erro claro em vez
+    // de deixar a exceção "crua" do fetch se propagar sem contexto.
+    throw new Error(`Não foi possível falar com o Upstash (${pathSegments[0]}): ${err.message}`);
+  }
   if (!res.ok) {
-    throw new Error(`Upstash respondeu HTTP ${res.status} ao executar ${pathSegments[0]}`);
+    const bodyText = await res.text().catch(() => '');
+    throw new Error(
+      `Upstash respondeu HTTP ${res.status} ao executar ${pathSegments[0]}. Confira se UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN estão corretos. ${bodyText.slice(0, 200)}`
+    );
   }
   return res.json();
 }
