@@ -169,6 +169,21 @@ function isHoje(dataStr) {
   return dataStr.slice(0, 10) === hoje;
 }
 
+// A listagem de pedidos só traz a DATA do pedido (sem horário), então "mais de 24
+// horas" é aproximado a partir da meia-noite do dia do pedido — é a maior precisão
+// possível com o que a API devolve, mas é uma aproximação (um pedido feito às 23h pode
+// contar quase 1 dia a mais do que de fato passou).
+function horasDesdePedido(dataStr) {
+  if (!dataStr) return null;
+  const dataPedido = new Date(`${dataStr.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(dataPedido.getTime())) return null;
+  return (Date.now() - dataPedido.getTime()) / (1000 * 60 * 60);
+}
+
+// Colunas que representam "pendência de item" no painel (ver a lista de situações
+// permitidas em situacoesService.js) — soma as duas variantes (Fábrica e Bonsucesso).
+const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
+
 // Monta o objeto final consumido pelo front: colunas (uma por situação, mesmo vazias)
 // já ordenadas, com os pedidos do mais recente para o mais antigo, e o resumo do topo.
 async function getPainelData({ periodo, de, ate }) {
@@ -236,6 +251,20 @@ async function getPainelData({ periodo, de, ate }) {
   );
   const statusAtivos = colunasFinal.filter((c) => c.total > 0).length;
 
+  // Alertas: pedidos "Em aberto" há mais de 24h, e soma das colunas de "pendência de
+  // item" — só entram no cálculo os pedidos realmente exibidos no período selecionado.
+  const colunaEmAberto = colunasFinal.find((c) => c.key === 'Em aberto');
+  const pedidosAbertoVencidos = colunaEmAberto
+    ? colunaEmAberto.pedidos.filter((p) => {
+        const horas = horasDesdePedido(p.data);
+        return horas !== null && horas >= 24;
+      }).length
+    : 0;
+
+  const pedidosPendenciaItem = colunasFinal
+    .filter((c) => KEYS_PENDENCIA_ITEM.includes(c.key))
+    .reduce((acc, c) => acc + c.total, 0);
+
   if (idsSituacaoDesconhecidos) {
     situacoesService.getSituacoesVendas({ forceRefresh: true }).catch(() => {});
   }
@@ -247,6 +276,8 @@ async function getPainelData({ periodo, de, ate }) {
       totalPedidos,
       pedidosHoje,
       statusAtivos,
+      pedidosAbertoVencidos,
+      pedidosPendenciaItem,
     },
     colunas: colunasFinal,
   };
