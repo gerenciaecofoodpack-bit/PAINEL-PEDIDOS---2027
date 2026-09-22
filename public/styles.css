@@ -1,12 +1,14 @@
 :root {
-  --bg: #0b0d12;
-  --surface: #161a22;
-  --surface-alt: #1d222c;
-  --border: #2a2f3a;
-  --text: #eef1f6;
-  --text-muted: #9aa3b2;
-  --primary: #5b8cff;
-  --primary-dark: #4470e0;
+  /* Paleta cinza neutro (sem tom azulado) — só os alertas (âmbar/vermelho) e o verde de
+     total seguem coloridos, de propósito, pra continuarem se destacando do resto. */
+  --bg: #121212;
+  --surface: #1c1c1e;
+  --surface-alt: #262628;
+  --border: #38383a;
+  --text: #f0f0f1;
+  --text-muted: #9c9c9e;
+  --primary: #7a7a7e;
+  --primary-dark: #5c5c60;
   --danger: #ff6b5e;
   --danger-bg: #3a1a17;
   --danger-border: #6b2a22;
@@ -48,7 +50,7 @@ button {
   gap: 6px;
   text-decoration: none;
 }
-.btn:hover { background: #262c38; }
+.btn:hover { background: #303032; }
 .btn-primary {
   background: var(--primary);
   border-color: var(--primary);
@@ -132,28 +134,62 @@ button {
   padding: 14px 18px;
 }
 
-/* "Balões" de alerta: só aparecem quando há algo a avisar (ver app.js), com cor e
-   pulsação para chamar atenção mesmo numa TV sem ninguém interagindo. */
+/* "Balões" de alerta: só aparecem quando há algo a avisar (ver app.js). Piscam de
+   verdade (não só um brilho suave) pra chamar atenção numa TV sem ninguém olhando de
+   perto, e são clicáveis: levam direto até a coluna do quadro com os pedidos em questão. */
 .alert-card {
-  animation: alert-pulse-warning 1.8s ease-in-out infinite;
+  cursor: pointer;
 }
+.alert-card:hover,
+.alert-card:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Pendência de item: pisca em amarelo. */
+.alert-card-info {
+  border-color: #f5c518;
+  animation: flash-yellow-bg 1s steps(1, end) infinite;
+}
+.alert-card-info .summary-label,
+.alert-card-info .summary-value {
+  animation: flash-yellow-text 1s steps(1, end) infinite;
+}
+@keyframes flash-yellow-bg {
+  0%, 49% { background: var(--surface); }
+  50%, 100% { background: #f5c518; }
+}
+@keyframes flash-yellow-text {
+  0%, 49% { color: inherit; }
+  50%, 100% { color: #241d00; }
+}
+
+/* Em aberto há mais de 24h: alerta mais forte — pisca mais rápido, em vermelho, com um
+   leve "salto" de escala, pra se destacar ainda mais que o alerta amarelo. */
 .alert-card-warning {
   border-color: var(--danger);
+  animation: flash-danger-bg 0.6s steps(1, end) infinite;
 }
-.alert-card-warning .summary-value { color: var(--danger); }
-.alert-card-info {
-  border-color: var(--primary);
-  animation-name: alert-pulse-info;
+.alert-card-warning .summary-label,
+.alert-card-warning .summary-value {
+  animation: flash-danger-text 0.6s steps(1, end) infinite;
 }
-.alert-card-info .summary-value { color: var(--primary); }
+@keyframes flash-danger-bg {
+  0%, 49% { background: var(--surface); transform: scale(1); }
+  50%, 100% { background: var(--danger); transform: scale(1.015); }
+}
+@keyframes flash-danger-text {
+  0%, 49% { color: inherit; }
+  50%, 100% { color: #2a0705; }
+}
 
-@keyframes alert-pulse-warning {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 94, 0); }
-  50% { box-shadow: 0 0 0 7px rgba(255, 107, 94, 0.18); }
+/* Realce temporário na coluna do quadro quando um alerta é clicado e leva até ela. */
+.status-column-highlight {
+  animation: column-highlight-pulse 0.5s ease-in-out 3;
 }
-@keyframes alert-pulse-info {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 140, 255, 0); }
-  50% { box-shadow: 0 0 0 7px rgba(91, 140, 255, 0.18); }
+@keyframes column-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 197, 24, 0); border-color: var(--border); }
+  50% { box-shadow: 0 0 0 8px rgba(245, 197, 24, 0.45); border-color: #f5c518; }
 }
 .summary-label {
   font-size: 12px;
@@ -285,7 +321,7 @@ button {
   cursor: pointer;
 }
 .status-filter-option:hover { background: var(--surface-alt); }
-.status-filter-option input { flex: 0 0 auto; }
+.status-filter-option input { flex: 0 0 auto; accent-color: var(--primary); }
 .status-filter-option .status-filter-dot {
   flex: 0 0 auto;
   width: 9px;
@@ -461,7 +497,7 @@ button {
 .columns-grid::-webkit-scrollbar-track,
 .status-orders::-webkit-scrollbar-track { background: transparent; }
 .columns-grid::-webkit-scrollbar-thumb,
-.status-orders::-webkit-scrollbar-thumb { background: #3a4150; border-radius: 6px; }
+.status-orders::-webkit-scrollbar-thumb { background: #46464a; border-radius: 6px; }
 
 /* ---------------- Modal de pré-visualização do pedido ---------------- */
 .modal-overlay {
