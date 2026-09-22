@@ -113,18 +113,47 @@ button {
 .error-banner #error-last-valid { color: #d99089; font-size: 13px; margin-left: auto; margin-right: 8px; }
 
 /* ---------------- Summary ---------------- */
+/* Flex em vez de grid fixo: além dos 3 cards padrão, os alertas (24h/pendência de
+   item) entram e saem da linha dependendo se há algo pra avisar, sem sobrar espaço em
+   branco nem quebrar o layout. */
 .summary-row {
   flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 16px 24px 4px;
 }
 .summary-card {
+  flex: 1 1 160px;
+  min-width: 160px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 18px;
+}
+
+/* "Balões" de alerta: só aparecem quando há algo a avisar (ver app.js), com cor e
+   pulsação para chamar atenção mesmo numa TV sem ninguém interagindo. */
+.alert-card {
+  animation: alert-pulse-warning 1.8s ease-in-out infinite;
+}
+.alert-card-warning {
+  border-color: var(--danger);
+}
+.alert-card-warning .summary-value { color: var(--danger); }
+.alert-card-info {
+  border-color: var(--primary);
+  animation-name: alert-pulse-info;
+}
+.alert-card-info .summary-value { color: var(--primary); }
+
+@keyframes alert-pulse-warning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 94, 0); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 107, 94, 0.18); }
+}
+@keyframes alert-pulse-info {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 140, 255, 0); }
+  50% { box-shadow: 0 0 0 7px rgba(91, 140, 255, 0.18); }
 }
 .summary-label {
   font-size: 12px;
@@ -561,7 +590,7 @@ button {
 }
 
 @media (max-width: 640px) {
-  .summary-row { grid-template-columns: repeat(2, 1fr); }
+  .summary-card { flex-basis: calc(50% - 8px); }
   .topbar { flex-direction: column; align-items: flex-start; gap: 4px; height: auto; padding: 10px 16px; }
   .app { height: auto; min-height: 100vh; overflow: visible; }
   .columns-grid { overflow-x: visible; flex-wrap: wrap; }

@@ -14,6 +14,10 @@
     summaryTotal: document.getElementById('summary-total'),
     summaryHoje: document.getElementById('summary-hoje'),
     summaryStatusAtivos: document.getElementById('summary-status-ativos'),
+    alertAbertoVencido: document.getElementById('alert-aberto-vencido'),
+    summaryAbertoVencido: document.getElementById('summary-aberto-vencido'),
+    alertPendenciaItem: document.getElementById('alert-pendencia-item'),
+    summaryPendenciaItem: document.getElementById('summary-pendencia-item'),
     searchInput: document.getElementById('search-input'),
     periodSelect: document.getElementById('period-select'),
     customPeriodGroup: document.getElementById('custom-period-group'),
@@ -129,6 +133,16 @@
     el.summaryTotal.textContent = painel.resumo.totalPedidos;
     el.summaryHoje.textContent = painel.resumo.pedidosHoje;
     el.summaryStatusAtivos.textContent = painel.resumo.statusAtivos;
+
+    // Os dois "balões" de alerta só aparecem quando há algo pra avisar — somem sozinhos
+    // quando o número zera, igual às colunas vazias do quadro.
+    const abertoVencido = painel.resumo.pedidosAbertoVencidos || 0;
+    el.summaryAbertoVencido.textContent = abertoVencido;
+    el.alertAbertoVencido.classList.toggle('hidden', abertoVencido === 0);
+
+    const pendenciaItem = painel.resumo.pedidosPendenciaItem || 0;
+    el.summaryPendenciaItem.textContent = pendenciaItem;
+    el.alertPendenciaItem.classList.toggle('hidden', pendenciaItem === 0);
   }
 
   function orderMatchesSearch(pedido, search) {
