@@ -271,13 +271,25 @@
     for (const item of p.itens) {
       const valorUnit = formatCurrency(item.valor);
       const qtd = item.quantidade != null ? item.quantidade : '-';
-      partes.push('<div class="modal-item-row">');
+      const estoqueNegativo = typeof item.estoqueAtual === 'number' && item.estoqueAtual < 0;
+      const estoqueSpan =
+        typeof item.estoqueAtual === 'number'
+          ? `<span class="${estoqueNegativo ? 'modal-item-estoque-negativo' : ''}">Estoque: ${escapeHtml(
+              item.estoqueAtual
+            )}</span>`
+          : '';
+      partes.push(`<div class="modal-item-row${estoqueNegativo ? ' modal-item-row-negativo' : ''}">`);
       partes.push(`<div class="modal-item-desc">${escapeHtml(item.descricao)}</div>`);
       partes.push(
         `<div class="modal-item-meta"><span>Qtd: ${escapeHtml(qtd)}${
           item.unidade ? ` ${escapeHtml(item.unidade)}` : ''
-        }</span>${valorUnit ? `<span>${valorUnit} un.</span>` : ''}</div>`
+        }</span>${valorUnit ? `<span>${valorUnit} un.</span>` : ''}${estoqueSpan}</div>`
       );
+      if (estoqueNegativo) {
+        partes.push(
+          '<div class="modal-item-alert">&#9888;&#65039; Estoque atual negativo — confira antes de separar este item.</div>'
+        );
+      }
       partes.push('</div>');
     }
     partes.push('</div></div>');
@@ -347,13 +359,20 @@
   // ---------------------------------------------------------------------
   // Arrastar e soltar para reordenar as colunas do quadro (ver a alça ☰ no cabeçalho de
   // cada coluna). A ordem escolhida é salva no navegador (COLUMN_ORDER_STORAGE_KEY).
+  //
+  // Usa Pointer Events (mouse + toque) em vez da API nativa de Drag and Drop do HTML:
+  // dentro de um quadro que já rola horizontalmente (.columns-grid), o navegador tende a
+  // interpretar o gesto de arrastar como rolagem em vez de iniciar o "drag" nativo — daí
+  // não funcionar de forma confiável. Controlando tudo manualmente aqui, não tem essa
+  // disputa entre rolar e arrastar.
   // ---------------------------------------------------------------------
 
-  let draggedColumnKey = null;
+  let draggingColumnEl = null;
+  let draggingPointerId = null;
 
-  // Entre as colunas visíveis no momento, acha depois de qual delas o mouse está —
+  // Entre as colunas visíveis no momento, acha depois de qual delas o ponteiro está —
   // técnica padrão de reordenação por arrastar-e-soltar (compara o centro de cada coluna
-  // com a posição horizontal do cursor).
+  // com a posição horizontal do cursor/dedo).
   function getColumnAfterPoint(x) {
     const columns = [...el.columnsGrid.querySelectorAll('.status-column:not(.dragging)')];
     let closest = { offset: -Infinity, element: null };
@@ -367,42 +386,42 @@
     return closest.element;
   }
 
-  function onColumnDragStart(evt) {
-    const columnEl = evt.currentTarget;
-    // Só inicia o arraste se o gesto começou na alça — clicar/arrastar em qualquer
-    // outro ponto da coluna (ex.: rolando a lista de pedidos) não deve mover a coluna.
-    if (!evt.target.closest('.status-drag-handle')) {
-      evt.preventDefault();
-      return;
+  function onDragHandlePointerMove(evt) {
+    if (!draggingColumnEl || evt.pointerId !== draggingPointerId) return;
+    const afterEl = getColumnAfterPoint(evt.clientX);
+    if (afterEl == null) {
+      el.columnsGrid.appendChild(draggingColumnEl);
+    } else if (afterEl !== draggingColumnEl) {
+      el.columnsGrid.insertBefore(draggingColumnEl, afterEl);
     }
-    draggedColumnKey = columnEl.dataset.key;
-    columnEl.classList.add('dragging');
-    evt.dataTransfer.effectAllowed = 'move';
-    evt.dataTransfer.setData('text/plain', draggedColumnKey || '');
-    stopAutoScroll();
   }
 
-  function onColumnDragEnd(evt) {
-    evt.currentTarget.classList.remove('dragging');
-    if (draggedColumnKey) {
-      persistDomColumnOrder();
-    }
-    draggedColumnKey = null;
+  function onDragHandlePointerUp(evt) {
+    if (!draggingColumnEl || evt.pointerId !== draggingPointerId) return;
+    draggingColumnEl.classList.remove('dragging');
+    document.body.classList.remove('dragging-column');
+    persistDomColumnOrder();
+    draggingColumnEl = null;
+    draggingPointerId = null;
+    document.removeEventListener('pointermove', onDragHandlePointerMove);
+    document.removeEventListener('pointerup', onDragHandlePointerUp);
+    document.removeEventListener('pointercancel', onDragHandlePointerUp);
     startAutoScroll();
   }
 
-  function onColumnsGridDragOver(evt) {
-    if (!draggedColumnKey) return;
-    evt.preventDefault();
-    evt.dataTransfer.dropEffect = 'move';
-    const dragging = el.columnsGrid.querySelector('.status-column.dragging');
-    if (!dragging) return;
-    const afterEl = getColumnAfterPoint(evt.clientX);
-    if (afterEl == null) {
-      el.columnsGrid.appendChild(dragging);
-    } else if (afterEl !== dragging) {
-      el.columnsGrid.insertBefore(dragging, afterEl);
-    }
+  function onDragHandlePointerDown(evt) {
+    if (evt.button !== undefined && evt.button !== 0) return; // só o botão principal do mouse
+    const columnEl = evt.currentTarget.closest('.status-column');
+    if (!columnEl) return;
+    evt.preventDefault(); // evita rolar o quadro ou selecionar texto enquanto arrasta
+    draggingColumnEl = columnEl;
+    draggingPointerId = evt.pointerId;
+    columnEl.classList.add('dragging');
+    document.body.classList.add('dragging-column'); // desliga seleção de texto na página toda
+    stopAutoScroll();
+    document.addEventListener('pointermove', onDragHandlePointerMove);
+    document.addEventListener('pointerup', onDragHandlePointerUp);
+    document.addEventListener('pointercancel', onDragHandlePointerUp);
   }
 
   // Salva a nova ordem completa (state.columnOrder guarda TODAS as situações, não só as
@@ -485,12 +504,11 @@
       nameEl.textContent = coluna.label;
       countEl.textContent = coluna.total;
       columnEl.dataset.key = coluna.key;
-      // Arrastar e soltar: a alça (☰) no cabeçalho é o único ponto que inicia o arraste
-      // (ver onColumnDragStart) — assim rolar a lista de pedidos dentro da coluna
+      // Arrastar e soltar: só a alça (☰) no cabeçalho inicia o arraste (ver
+      // onDragHandlePointerDown) — assim rolar a lista de pedidos dentro da coluna
       // continua funcionando normalmente.
-      columnEl.draggable = true;
-      columnEl.addEventListener('dragstart', onColumnDragStart);
-      columnEl.addEventListener('dragend', onColumnDragEnd);
+      const dragHandle = node.querySelector('.status-drag-handle');
+      dragHandle.addEventListener('pointerdown', onDragHandlePointerDown);
       if (coluna.cor) {
         columnEl.style.setProperty('--status-color', coluna.cor);
       }
@@ -925,9 +943,6 @@
         onAlertPendenciaActivate();
       }
     });
-
-    el.columnsGrid.addEventListener('dragover', onColumnsGridDragOver);
-    el.columnsGrid.addEventListener('drop', (evt) => evt.preventDefault());
 
     el.resetColumnOrderBtn.addEventListener('click', () => {
       state.columnOrder = [];

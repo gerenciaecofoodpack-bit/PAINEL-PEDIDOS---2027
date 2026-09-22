@@ -397,13 +397,24 @@ button {
   cursor: grab;
   padding: 2px 2px 2px 0;
   line-height: 1;
+  /* Evita que o navegador tente rolar a página ao começar a arrastar pelo toque —
+     sem isso, num celular/tablet o gesto vira rolagem em vez de arraste. */
+  touch-action: none;
 }
 .status-drag-handle:active { cursor: grabbing; }
 
-/* Enquanto uma coluna está sendo arrastada, ela fica meio transparente no lugar de
-   origem — o "espaço" que se move de verdade é o próprio elemento (ver app.js). */
+/* Enquanto uma coluna está sendo arrastada, ela fica meio transparente no lugar em que
+   está (ela mesma se move de verdade pelo quadro conforme o ponteiro passa por cima das
+   vizinhas — ver app.js). */
 .status-column.dragging {
   opacity: 0.35;
+}
+
+/* Enquanto qualquer coluna está sendo arrastada, desliga a seleção de texto na página
+   inteira — evita "pintar" texto sem querer se o ponteiro escorregar da alça durante o
+   arraste rápido. */
+body.dragging-column {
+  user-select: none;
 }
 
 .status-header::before {
@@ -637,6 +648,22 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
+}
+/* Item cujo produto está com estoque físico atual negativo no Bling — destaque
+   vermelho, para conferência antes de separar/faturar o pedido. */
+.modal-item-row-negativo {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+}
+.modal-item-estoque-negativo {
+  color: var(--danger);
+  font-weight: 700;
+}
+.modal-item-alert {
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
 }
 .modal-item-desc { font-size: 13.5px; color: var(--text); }
 .modal-item-meta {
