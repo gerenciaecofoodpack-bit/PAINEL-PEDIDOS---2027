@@ -205,8 +205,11 @@ button {
   top: calc(100% + 6px);
   left: 0;
   z-index: 20;
+  /* Nunca mais largo que a tela disponível (com uma folguinha nas bordas) — evita o
+     painel ser cortado em telas estreitas/TVs verticais. */
   width: 300px;
-  max-height: 380px;
+  max-width: calc(100vw - 32px);
+  max-height: min(380px, calc(100vh - 140px));
   display: flex;
   flex-direction: column;
   background: var(--surface);
@@ -214,6 +217,12 @@ button {
   border-radius: var(--radius);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   overflow: hidden;
+}
+/* Quando o painel não caberia até a borda direita da tela, ele "vira" e alinha pela
+   direita em vez da esquerda (ver JS em openStatusFilterPanel). */
+.status-filter-panel.align-right {
+  left: auto;
+  right: 0;
 }
 .status-filter-actions {
   flex: 0 0 auto;

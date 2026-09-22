@@ -298,6 +298,14 @@
 
   function openStatusFilterPanel() {
     el.statusFilterPanel.classList.remove('hidden');
+    // Alinha pela esquerda por padrão; se isso for estourar a borda direita da tela
+    // (telas estreitas, ou o botão "Status" ficando perto da direita), alinha pela
+    // direita em vez disso, pra nunca cortar o painel.
+    el.statusFilterPanel.classList.remove('align-right');
+    const rect = el.statusFilterPanel.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      el.statusFilterPanel.classList.add('align-right');
+    }
     el.statusFilterBtn.setAttribute('aria-expanded', 'true');
   }
 
