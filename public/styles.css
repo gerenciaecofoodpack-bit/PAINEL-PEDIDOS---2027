@@ -58,6 +58,18 @@ button {
 }
 .btn-primary:hover { background: var(--primary-dark); }
 .btn-small { padding: 5px 10px; font-size: 13px; }
+.btn[disabled] { opacity: 0.7; cursor: default; }
+
+/* Ícone de "Atualizar agora" gira enquanto a busca está em andamento — sem isso, uma
+   atualização de 20-30s (período com muitos pedidos) parece que o botão travou. */
+.refresh-icon.spinning {
+  display: inline-block;
+  animation: refresh-spin 0.8s linear infinite;
+}
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 /* ---------------- Connect screen ---------------- */
 .connect-screen {

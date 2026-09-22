@@ -6,6 +6,8 @@
     app: document.getElementById('app'),
     lastUpdate: document.getElementById('last-update'),
     refreshBtn: document.getElementById('refresh-btn'),
+    refreshIcon: document.getElementById('refresh-icon'),
+    refreshBtnLabel: document.getElementById('refresh-btn-label'),
     tvModeBtn: document.getElementById('tv-mode-btn'),
     errorBanner: document.getElementById('error-banner'),
     errorMessage: document.getElementById('error-message'),
@@ -578,7 +580,12 @@
     if (state.fetching) return;
     state.fetching = true;
     if (manual) {
+      // Uma atualização com muitos pedidos pode levar 20-30s (paginação + busca de
+      // itens) — sem esse retorno visual, o botão só fica meio apagado por um bom
+      // tempo e parece que não fez nada.
       el.refreshBtn.setAttribute('disabled', 'true');
+      el.refreshIcon.classList.add('spinning');
+      el.refreshBtnLabel.textContent = 'Atualizando...';
     }
     try {
       const painel = await fetchJson(`/api/pedidos?${buildQuery()}`);
@@ -598,6 +605,8 @@
       state.fetching = false;
       if (manual) {
         el.refreshBtn.removeAttribute('disabled');
+        el.refreshIcon.classList.remove('spinning');
+        el.refreshBtnLabel.textContent = 'Atualizar agora';
       }
     }
   }
