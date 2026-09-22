@@ -27,13 +27,15 @@ const SITUACOES_PERMITIDAS_EM_ORDEM = [
   'Enviado ao transportador',
   'Em produção',
   'Em separação Fábrica',
+  // As duas colunas de "pendente item" ficam lado a lado de propósito, pra facilitar a
+  // visualização de quem está olhando o quadro (pedido do usuário).
   'Pendente ítem - Fábrica',
+  'Pendente item - Bonsucesso',
   'Bloqueado',
   'Em separação - Bonsucesso',
   'Faturado parcial',
   'Pedido separado - Fábrica',
   'Pedido separado - Bonsucesso',
-  'Pendente item - Bonsucesso',
   'Pronto para retirada - Bonsucesso',
   'Pronto para retirada - Fábrica',
   'Pedido Separado - Franquias',
