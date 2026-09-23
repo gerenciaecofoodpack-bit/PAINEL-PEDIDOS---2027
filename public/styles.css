@@ -266,12 +266,6 @@ button {
 }
 .origem-legend-swatch.bling { background: #7bba4c; }
 .origem-legend-swatch.ecalc { background: #ca1519; }
-/* Fica visível também no Modo TV (não é escondida com o resto de .filters-row) — é
-   justamente na TV, sem ninguém pra perguntar, que a legenda de cores mais faz falta. */
-.summary-row .origem-legend {
-  margin-left: auto;
-  padding: 0 4px;
-}
 
 .period-group select, .custom-period-group input {
   padding: 7px 10px;
