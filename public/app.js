@@ -199,6 +199,9 @@
     const cardEl = orderNode.querySelector('.order-card');
     cardEl.setAttribute('role', 'button');
     cardEl.setAttribute('tabindex', '0');
+    // Testeira colorida (ver styles.css .order-card[data-origem]) identificando de qual
+    // sistema o pedido veio: 'bling' (hoje, sempre) ou 'ecalc' (integração futura).
+    cardEl.dataset.origem = pedido.origem || 'bling';
     cardEl.addEventListener('click', () => openPedidoModal(pedido.id));
     cardEl.addEventListener('keydown', (evt) => {
       if (evt.key === 'Enter' || evt.key === ' ') {

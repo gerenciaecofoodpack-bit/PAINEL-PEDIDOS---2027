@@ -245,6 +245,33 @@ button {
   font-size: 13px;
   color: var(--text-muted);
 }
+.origem-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.origem-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.origem-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+.origem-legend-swatch.bling { background: #7bba4c; }
+.origem-legend-swatch.ecalc { background: #ca1519; }
+/* Fica visível também no Modo TV (não é escondida com o resto de .filters-row) — é
+   justamente na TV, sem ninguém pra perguntar, que a legenda de cores mais faz falta. */
+.summary-row .origem-legend {
+  margin-left: auto;
+  padding: 0 4px;
+}
+
 .period-group select, .custom-period-group input {
   padding: 7px 10px;
   border: 1px solid var(--border);
@@ -388,7 +415,11 @@ button {
   align-items: center;
   gap: 10px;
   background: var(--surface-alt);
-  border-top: 4px solid var(--status-color, var(--primary));
+  /* Fininha e neutra de propósito: não usa mais a cor da situação (--status-color, que
+     pode vir verde/vermelha do Bling) porque essas duas cores agora têm outro
+     significado no painel — identificam a ORIGEM do pedido (testeira do card:
+     ver .order-card[data-origem]). Aqui fica sempre a mesma cor do número da coluna. */
+  border-top: 2px solid var(--primary);
 }
 .status-drag-handle {
   flex: 0 0 auto;
@@ -423,7 +454,7 @@ body.dragging-column {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--status-color, var(--primary));
+  background: var(--primary);
 }
 .status-name {
   flex: 1 1 auto;
@@ -436,7 +467,7 @@ body.dragging-column {
 .status-count {
   font-size: 26px;
   font-weight: 800;
-  color: var(--status-color, var(--primary));
+  color: var(--primary);
   line-height: 1;
   flex: 0 0 auto;
 }
@@ -489,7 +520,13 @@ body.dragging-column {
   background: var(--surface-alt);
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.05s ease;
+  /* Testeira: faixa colorida na lateral esquerda indicando de qual sistema o pedido
+     veio (ver data-origem, setado em appendOrderCard/app.js). Verde = Bling (Ecofood).
+     Vermelho = eCalc/Exact (integração futura). */
+  border-left: 4px solid var(--border);
 }
+.order-card[data-origem="bling"] { border-left-color: #7bba4c; }
+.order-card[data-origem="ecalc"] { border-left-color: #ca1519; }
 .order-card:hover,
 .order-card:focus-visible {
   border-color: var(--primary);
