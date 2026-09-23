@@ -489,38 +489,53 @@
     return ordenado;
   }
 
-  // Paleta de cores do TOPO de cada coluna (linha fina + número da quantidade) — de
-  // propósito sem nenhum tom de verde ou vermelho, já que essas duas cores agora
-  // significam outra coisa no painel (a testeira dos cards, indicando a ORIGEM do
-  // pedido: Bling x eCalc). Cada situação sempre recebe a mesma cor desta lista (é um
-  // hash do nome, não sorteio a cada atualização) — assim as cores não ficam trocando
-  // de coluna a cada 30s, só variam de uma situação pra outra.
-  const PALETA_COR_COLUNA = [
-    '#5b8ff9', // azul
-    '#6c5ce7', // índigo
-    '#a55eea', // violeta
-    '#ff6fa5', // rosa
-    '#fd9644', // laranja
-    '#f7b731', // âmbar
-    '#45aaf2', // azul-céu
-    '#63cdda', // ciano
-    '#778beb', // azul-lavanda
-    '#eb5b95', // magenta
+  // Cor do TOPO de cada coluna (linha fina + número da quantidade). Duas regras pedidas
+  // pelo usuário:
+  //  1) nunca usar verde (#7bba4c) nem vermelho (#ca1519) — essas cores agora têm outro
+  //     significado no painel: são a testeira do card, indicando a ORIGEM do pedido
+  //     (Bling x eCalc);
+  //  2) nenhuma coluna repete a cor de outra.
+  // Pra garantir as duas coisas ao mesmo tempo (e continuar estável — a mesma situação
+  // sempre com a mesma cor, sem ficar trocando a cada atualização de 30s), geramos um
+  // tom de matiz (hue) DIFERENTE para cada situação, na ORDEM FIXA em que o backend as
+  // lista (situacoesService.js) — não na ordem em que aparecem na tela, que muda com
+  // arrastar-e-soltar/filtro/pesquisa. Os matizes ficam dentro de dois arcos do círculo
+  // de cores que evitam a faixa do verde (~70°–160°) e a do vermelho (~345°–15°).
+  const ARCOS_MATIZ_PERMITIDOS = [
+    [15, 70], // laranja -> amarelo
+    [160, 345], // ciano -> azul -> roxo -> magenta
   ];
+  const EXTENSAO_TOTAL_ARCOS = ARCOS_MATIZ_PERMITIDOS.reduce((acc, [a, b]) => acc + (b - a), 0);
 
-  function corAleatoriaPorColuna(key) {
-    let hash = 0;
-    const str = String(key || '');
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  function matizParaIndice(indice, total) {
+    const fracao = total > 0 ? indice / total : 0;
+    let alvo = fracao * EXTENSAO_TOTAL_ARCOS;
+    for (const [inicio, fim] of ARCOS_MATIZ_PERMITIDOS) {
+      const extensao = fim - inicio;
+      if (alvo <= extensao) return inicio + alvo;
+      alvo -= extensao;
     }
-    const idx = Math.abs(hash) % PALETA_COR_COLUNA.length;
-    return PALETA_COR_COLUNA[idx];
+    return ARCOS_MATIZ_PERMITIDOS[0][0];
+  }
+
+  // Monta um mapa { key da coluna -> cor } a partir da lista COMPLETA de colunas que o
+  // backend manda (painel.colunas, sempre na mesma ordem fixa) — assim toda tela que
+  // precisa dessa cor (o quadro e o painel de filtro de status) usa exatamente a mesma
+  // cor pra mesma situação, sem repetir nenhuma.
+  function mapaCoresColunas(colunas) {
+    const total = colunas.length;
+    const mapa = new Map();
+    colunas.forEach((coluna, indice) => {
+      const matiz = matizParaIndice(indice, total);
+      mapa.set(coluna.key, `hsl(${matiz.toFixed(1)}, 65%, 60%)`);
+    });
+    return mapa;
   }
 
   function renderColumns(painel) {
     const search = state.search.trim();
     el.columnsGrid.innerHTML = '';
+    const corPorKey = mapaCoresColunas(painel.colunas);
 
     for (const coluna of ordenarColunasConformePreferencia(painel.colunas)) {
       // Filtro de status: só as situações marcadas no seletor "Status" aparecem.
@@ -545,7 +560,7 @@
       // continua funcionando normalmente.
       const dragHandle = node.querySelector('.status-drag-handle');
       dragHandle.addEventListener('pointerdown', onDragHandlePointerDown);
-      columnEl.style.setProperty('--status-color', corAleatoriaPorColuna(coluna.key));
+      columnEl.style.setProperty('--status-color', corPorKey.get(coluna.key));
 
       const primeiros = visiveis.slice(0, RENDER_CAP);
       const resto = visiveis.slice(RENDER_CAP);
@@ -669,6 +684,7 @@
   // permitidas (ver situacoesService.js), na ordem fixa configurada.
   function buildStatusFilterOptions(painel) {
     const colunas = painel.colunas || [];
+    const corPorKey = mapaCoresColunas(colunas);
     // Sempre atualizado (independente do "return" abaixo), pra reordenação por
     // arrastar-e-soltar sempre saber o conjunto completo de situações existentes.
     state.allColumnKeys = colunas.map((c) => c.key);
@@ -708,7 +724,7 @@
 
       const dot = document.createElement('span');
       dot.className = 'status-filter-dot';
-      dot.style.setProperty('--status-color', corAleatoriaPorColuna(coluna.key));
+      dot.style.setProperty('--status-color', corPorKey.get(coluna.key));
 
       const span = document.createElement('span');
       span.className = 'status-filter-label';
