@@ -248,19 +248,20 @@ button {
 .origem-legend {
   display: flex;
   align-items: center;
-  gap: 14px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 10px;
   color: var(--text-muted);
+  opacity: 0.6;
 }
 .origem-legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .origem-legend-swatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   flex: 0 0 auto;
 }
 .origem-legend-swatch.bling { background: #7bba4c; }
@@ -415,11 +416,11 @@ button {
   align-items: center;
   gap: 10px;
   background: var(--surface-alt);
-  /* Fininha e neutra de propósito: não usa mais a cor da situação (--status-color, que
-     pode vir verde/vermelha do Bling) porque essas duas cores agora têm outro
-     significado no painel — identificam a ORIGEM do pedido (testeira do card:
-     ver .order-card[data-origem]). Aqui fica sempre a mesma cor do número da coluna. */
-  border-top: 2px solid var(--primary);
+  /* Fininha de propósito. A cor vem de --status-color (setada em app.js a partir de uma
+     paleta fixa, sem verde/vermelho — essas duas cores agora têm outro significado no
+     painel: identificam a ORIGEM do pedido na testeira do card, ver
+     .order-card[data-origem]). */
+  border-top: 2px solid var(--status-color, var(--primary));
 }
 .status-drag-handle {
   flex: 0 0 auto;
@@ -454,7 +455,7 @@ body.dragging-column {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--status-color, var(--primary));
 }
 .status-name {
   flex: 1 1 auto;
@@ -467,7 +468,7 @@ body.dragging-column {
 .status-count {
   font-size: 26px;
   font-weight: 800;
-  color: var(--primary);
+  color: var(--status-color, var(--primary));
   line-height: 1;
   flex: 0 0 auto;
 }

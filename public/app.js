@@ -489,6 +489,35 @@
     return ordenado;
   }
 
+  // Paleta de cores do TOPO de cada coluna (linha fina + número da quantidade) — de
+  // propósito sem nenhum tom de verde ou vermelho, já que essas duas cores agora
+  // significam outra coisa no painel (a testeira dos cards, indicando a ORIGEM do
+  // pedido: Bling x eCalc). Cada situação sempre recebe a mesma cor desta lista (é um
+  // hash do nome, não sorteio a cada atualização) — assim as cores não ficam trocando
+  // de coluna a cada 30s, só variam de uma situação pra outra.
+  const PALETA_COR_COLUNA = [
+    '#5b8ff9', // azul
+    '#6c5ce7', // índigo
+    '#a55eea', // violeta
+    '#ff6fa5', // rosa
+    '#fd9644', // laranja
+    '#f7b731', // âmbar
+    '#45aaf2', // azul-céu
+    '#63cdda', // ciano
+    '#778beb', // azul-lavanda
+    '#eb5b95', // magenta
+  ];
+
+  function corAleatoriaPorColuna(key) {
+    let hash = 0;
+    const str = String(key || '');
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) | 0;
+    }
+    const idx = Math.abs(hash) % PALETA_COR_COLUNA.length;
+    return PALETA_COR_COLUNA[idx];
+  }
+
   function renderColumns(painel) {
     const search = state.search.trim();
     el.columnsGrid.innerHTML = '';
@@ -516,9 +545,7 @@
       // continua funcionando normalmente.
       const dragHandle = node.querySelector('.status-drag-handle');
       dragHandle.addEventListener('pointerdown', onDragHandlePointerDown);
-      if (coluna.cor) {
-        columnEl.style.setProperty('--status-color', coluna.cor);
-      }
+      columnEl.style.setProperty('--status-color', corAleatoriaPorColuna(coluna.key));
 
       const primeiros = visiveis.slice(0, RENDER_CAP);
       const resto = visiveis.slice(RENDER_CAP);
@@ -681,7 +708,7 @@
 
       const dot = document.createElement('span');
       dot.className = 'status-filter-dot';
-      if (coluna.cor) dot.style.setProperty('--status-color', coluna.cor);
+      dot.style.setProperty('--status-color', corAleatoriaPorColuna(coluna.key));
 
       const span = document.createElement('span');
       span.className = 'status-filter-label';
