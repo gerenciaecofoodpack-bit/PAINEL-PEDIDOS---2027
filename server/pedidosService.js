@@ -142,7 +142,11 @@ function garantirItensEmCache(idsPedidos) {
   return Promise.all(aBuscarAgora.map((id) => fetchItensPedido(id)));
 }
 
-function formatPedidoResumo(pedido) {
+// "origem" identifica de qual sistema o pedido veio, pra pintar a testeira do card no
+// painel: 'bling' (conta Bling/Ecofood, é a única fonte hoje) ou 'ecalc' (Exact/eCalc,
+// integração futura — quando essa segunda fonte for ligada, quem buscar os pedidos dela
+// deve chamar formatPedidoResumo(pedido, 'ecalc') em vez de aceitar o padrão).
+function formatPedidoResumo(pedido, origem = 'bling') {
   const cached = itensCache.get(pedido.id);
   const itens = cached ? cached.itens : null;
   const quantidadeItens = itens ? itens.length : null;
@@ -160,6 +164,7 @@ function formatPedidoResumo(pedido) {
     quantidadeItens,
     quantidadeTotal,
     itensResumo,
+    origem,
   };
 }
 
