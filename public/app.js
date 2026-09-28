@@ -364,6 +364,10 @@
       partes.push(`<div class="modal-section"><h3>Observações</h3><p class="modal-obs">${escapeHtml(p.observacoes)}</p></div>`);
     }
 
+    if (p.observacoesInternas) {
+      partes.push(`<div class="modal-section"><h3>&#128221; Observações internas</h3><p class="modal-obs modal-obs-internas">${escapeHtml(p.observacoesInternas).replace(/\n/g, '<br>')}</p></div>`);
+    }
+
     return partes.join('');
   }
 

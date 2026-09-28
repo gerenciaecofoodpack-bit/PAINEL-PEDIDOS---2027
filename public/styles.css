@@ -739,6 +739,12 @@ body.dragging-column {
   white-space: pre-wrap;
   margin: 0;
 }
+.modal-obs-internas {
+  background: rgba(184, 134, 11, 0.12);
+  border-left: 3px solid #b8860b;
+  padding: 8px 10px;
+  border-radius: 4px;
+}
 
 /* Janela "Pendência de item há mais de 60 dias" (lista aberta ao clicar no balão). */
 .pendencia-antiga-lista {
