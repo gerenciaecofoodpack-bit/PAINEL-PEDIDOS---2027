@@ -313,10 +313,16 @@ async function getPainelData({ periodo, de, ate }) {
   // escolhido no quadro) — usa a busca independente de período feita acima
   // (pedidosPendenciaItemBrutos), pra sempre achar os pedidos realmente antigos mesmo
   // que o filtro de período do quadro esteja em "Hoje" ou "Últimos 7 dias".
-  const pedidosPendenciaItemMais60Dias = pedidosPendenciaItemBrutos.filter((p) => {
+  const pedidosPendenciaAntigosBrutos = pedidosPendenciaItemBrutos.filter((p) => {
     const horas = horasDesdePedido(p.data);
     return horas !== null && horas >= HORAS_60_DIAS;
-  }).length;
+  });
+  const pedidosPendenciaItemMais60Dias = pedidosPendenciaAntigosBrutos.length;
+  // IDs dos pedidos específicos que disparam o alerta — o front usa essa lista pra
+  // destacar exatamente ESSES cards dentro das colunas de pendência (que também têm
+  // pedidos pendentes mais recentes, que não fazem parte do alerta) quando a pessoa
+  // clica no balão "há mais de 60 dias".
+  const pedidosPendenciaItemMais60DiasIds = pedidosPendenciaAntigosBrutos.map((p) => p.id);
 
   if (idsSituacaoDesconhecidos) {
     situacoesService.getSituacoesVendas({ forceRefresh: true }).catch(() => {});
@@ -332,6 +338,7 @@ async function getPainelData({ periodo, de, ate }) {
       pedidosAbertoVencidos,
       pedidosPendenciaItem,
       pedidosPendenciaItemMais60Dias,
+      pedidosPendenciaItemMais60DiasIds,
     },
     colunas: colunasFinal,
   };
