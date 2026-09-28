@@ -189,17 +189,56 @@ function horasDesdePedido(dataStr) {
 // permitidas em situacoesService.js) — soma as duas variantes (Fábrica e Bonsucesso).
 const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
 
+// Quantas horas equivalem a 60 dias (usado no alerta "pendência de item há mais de 60
+// dias" — ver getPainelData).
+const HORAS_60_DIAS = 60 * 24;
+
+// Busca TODOS os pedidos que estão HOJE numa das situações informadas, direto na API,
+// SEM filtro de data — diferente de fetchAllPedidos, que respeita o período escolhido no
+// quadro (Hoje/7 dias/30 dias/etc). O alerta de "pendência de item há mais de 60 dias"
+// precisa contar certo mesmo que a pessoa esteja com o quadro filtrado em "Hoje", por
+// exemplo — senão o balão sumiria (ficaria em 0) toda vez que o período não cobrisse os
+// pedidos antigos, que é exatamente o caso que o alerta existe pra avisar.
+async function fetchPedidosPorSituacoes(idsSituacoes) {
+  if (!idsSituacoes || idsSituacoes.length === 0) return [];
+  const pedidos = [];
+  let pagina = 1;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (pagina > MAX_PAGES_SAFETY) break;
+    // eslint-disable-next-line no-await-in-loop
+    const resp = await bling.apiGet('/pedidos/vendas', {
+      pagina,
+      limite: PAGE_SIZE,
+      'idsSituacoes[]': idsSituacoes,
+    });
+    const data = resp.data || [];
+    pedidos.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    pagina += 1;
+  }
+  return pedidos;
+}
+
 // Monta o objeto final consumido pelo front: colunas (uma por situação, mesmo vazias)
 // já ordenadas, com os pedidos do mais recente para o mais antigo, e o resumo do topo.
 async function getPainelData({ periodo, de, ate }) {
   const { dataInicial, dataFinal } = resolvePeriodo(periodo, de, ate);
 
-  const [situacoes, pedidosBrutos] = await Promise.all([
-    situacoesService.getSituacoesVendas(),
-    fetchAllPedidos({ dataInicial, dataFinal }),
-  ]);
-
+  // Situações precisam vir primeiro (sem depender do período) pra sabermos os IDs das
+  // colunas de "pendência de item" antes de disparar a busca independente de período
+  // logo abaixo.
+  const situacoes = await situacoesService.getSituacoesVendas();
   const { columns, situacaoIdToKey, allSituacaoIds } = situacoesService.buildColumnDefinitions(situacoes);
+
+  const situacaoIdsPendenciaItem = columns
+    .filter((c) => KEYS_PENDENCIA_ITEM.includes(c.key))
+    .flatMap((c) => c.situacaoIds);
+
+  const [pedidosBrutos, pedidosPendenciaItemBrutos] = await Promise.all([
+    fetchAllPedidos({ dataInicial, dataFinal }),
+    fetchPedidosPorSituacoes(situacaoIdsPendenciaItem),
+  ]);
 
   // Só as situações da lista permitida (ver situacoesService.js) viram coluna. Pedidos em
   // qualquer outra situação da conta são intencionalmente deixados de fora do painel —
@@ -270,6 +309,15 @@ async function getPainelData({ periodo, de, ate }) {
     .filter((c) => KEYS_PENDENCIA_ITEM.includes(c.key))
     .reduce((acc, c) => acc + c.total, 0);
 
+  // Este contador NÃO usa colunasFinal (que só tem os pedidos dentro do período
+  // escolhido no quadro) — usa a busca independente de período feita acima
+  // (pedidosPendenciaItemBrutos), pra sempre achar os pedidos realmente antigos mesmo
+  // que o filtro de período do quadro esteja em "Hoje" ou "Últimos 7 dias".
+  const pedidosPendenciaItemMais60Dias = pedidosPendenciaItemBrutos.filter((p) => {
+    const horas = horasDesdePedido(p.data);
+    return horas !== null && horas >= HORAS_60_DIAS;
+  }).length;
+
   if (idsSituacaoDesconhecidos) {
     situacoesService.getSituacoesVendas({ forceRefresh: true }).catch(() => {});
   }
@@ -283,6 +331,7 @@ async function getPainelData({ periodo, de, ate }) {
       statusAtivos,
       pedidosAbertoVencidos,
       pedidosPendenciaItem,
+      pedidosPendenciaItemMais60Dias,
     },
     colunas: colunasFinal,
   };
