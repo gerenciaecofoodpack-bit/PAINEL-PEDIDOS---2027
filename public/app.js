@@ -90,7 +90,17 @@
     // anterior) e só passa a restringir de fato quando o usuário desmarcar algo.
     statusFilter: new Set(),
     statusFilterKnownKeys: null, // string com as keys conhecidas, pra saber quando reconstruir o painel de opções
+    // IDs dos pedidos que disparam o alerta "pendência de item há mais de 60 dias" (ver
+    // renderSummary) — usado só pra destacar esses cards específicos dentro das colunas
+    // de pendência, que também têm pedidos pendentes mais recentes.
+    pendenciaAntigaIds: new Set(),
   };
+
+  // Keys das colunas usadas pelos alertas do topo (ver renderSummary/init) — ficam aqui
+  // em escopo compartilhado porque irParaPedidosPendenciaAntiga (mais abaixo) também
+  // precisa de KEYS_PENDENCIA_ITEM, fora da função init().
+  const KEYS_EM_ABERTO = ['Em aberto'];
+  const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
 
   const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -180,6 +190,7 @@
     const pendenciaItem60d = painel.resumo.pedidosPendenciaItemMais60Dias || 0;
     el.summaryPendenciaItem60d.textContent = pendenciaItem60d;
     el.alertPendenciaItem60d.classList.toggle('hidden', pendenciaItem60d === 0);
+    state.pendenciaAntigaIds = new Set(painel.resumo.pedidosPendenciaItemMais60DiasIds || []);
   }
 
   function orderMatchesSearch(pedido, search) {
@@ -211,6 +222,13 @@
     // Testeira colorida (ver styles.css .order-card[data-origem]) identificando de qual
     // sistema o pedido veio: 'bling' (hoje, sempre) ou 'ecalc' (integração futura).
     cardEl.dataset.origem = pedido.origem || 'bling';
+    // Marca visualmente os pedidos que disparam o alerta "pendência de item há mais de
+    // 60 dias" (ver renderSummary/irParaPendenciaAntiga) — dentro da mesma coluna existem
+    // pedidos pendentes mais recentes que NÃO devem ficar marcados.
+    if (state.pendenciaAntigaIds.has(pedido.id)) {
+      cardEl.classList.add('order-card-pendencia-antiga');
+      cardEl.dataset.pendenciaAntiga = '1';
+    }
     cardEl.addEventListener('click', () => openPedidoModal(pedido.id));
     cardEl.addEventListener('keydown', (evt) => {
       if (evt.key === 'Enter' || evt.key === ' ') {
@@ -661,6 +679,26 @@
     }
   }
 
+  // Igual a irParaColuna, mas em vez de piscar a coluna inteira, rola direto até os
+  // CARDS específicos que disparam o alerta de "pendência de item há mais de 60 dias" (já
+  // marcados com a classe order-card-pendencia-antiga em appendOrderCard) e pisca só eles
+  // — a coluna de pendência de item tem outros pedidos mais recentes que não fazem parte
+  // desse alerta e não devem ser destacados.
+  function irParaPedidosPendenciaAntiga() {
+    ensureColunaVisivel(KEYS_PENDENCIA_ITEM);
+
+    const cards = Array.from(el.columnsGrid.querySelectorAll('.order-card-pendencia-antiga'));
+    if (cards.length === 0) return;
+
+    state.lastManualScrollAt = Date.now();
+    cards[0].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' });
+
+    for (const cardEl of cards) {
+      cardEl.classList.add('order-card-pendencia-antiga-flash');
+      setTimeout(() => cardEl.classList.remove('order-card-pendencia-antiga-flash'), 2200);
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Filtro de status (multi-seleção)
   // ---------------------------------------------------------------------
@@ -984,15 +1022,15 @@
     document.addEventListener('fullscreenchange', onFullscreenChange);
 
     // Alertas do topo: clicar leva até a(s) coluna(s) correspondente(s) no quadro.
-    const KEYS_EM_ABERTO = ['Em aberto'];
-    const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
     const onAlertAbertoActivate = () => irParaColuna(KEYS_EM_ABERTO);
     const onAlertPendenciaActivate = () => irParaColuna(KEYS_PENDENCIA_ITEM);
     // O balão de "mais de 60 dias" conta pedidos independente do período escolhido no
     // quadro (ver renderSummary) — então, se o quadro estiver filtrado em algo mais
     // curto que "Todo o período", os pedidos que o balão está anunciando podem nem
     // estar na tela ainda. Por isso, ao clicar, troca o período pra "todos" primeiro (se
-    // já não estiver) e só then rola até a coluna.
+    // já não estiver) e só então rola direto até os pedidos específicos (não a coluna
+    // inteira — ela tem outros pedidos pendentes mais recentes que não fazem parte
+    // deste alerta).
     const onAlertPendencia60dActivate = async () => {
       if (state.periodo !== 'todos') {
         state.periodo = 'todos';
@@ -1000,7 +1038,7 @@
         el.customPeriodGroup.classList.add('hidden');
         await loadPedidos({ manual: true });
       }
-      irParaColuna(KEYS_PENDENCIA_ITEM);
+      irParaPedidosPendenciaAntiga();
     };
     el.alertAbertoVencido.addEventListener('click', onAlertAbertoActivate);
     el.alertAbertoVencido.addEventListener('keydown', (evt) => {

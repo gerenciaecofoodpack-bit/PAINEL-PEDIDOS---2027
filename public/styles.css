@@ -195,6 +195,44 @@ button {
   50%, 100% { color: #2a0705; }
 }
 
+/* Pendência de item há mais de 60 dias: pisca num amarelo mais escuro (âmbar) que o do
+   alerta normal de "Pendência de item" (#f5c518) — pra dar pra diferenciar os dois à
+   primeira vista, sem usar vermelho (que já é o alerta de "Em aberto vencido" acima). */
+.alert-card-amber-escuro {
+  border-color: #b8860b;
+  animation: flash-amber-escuro-bg 0.8s steps(1, end) infinite;
+}
+.alert-card-amber-escuro .summary-label,
+.alert-card-amber-escuro .summary-value {
+  animation: flash-amber-escuro-text 0.8s steps(1, end) infinite;
+}
+@keyframes flash-amber-escuro-bg {
+  0%, 49% { background: var(--surface); }
+  50%, 100% { background: #b8860b; }
+}
+@keyframes flash-amber-escuro-text {
+  0%, 49% { color: inherit; }
+  50%, 100% { color: #241a00; }
+}
+
+/* Destaque PERMANENTE (enquanto o pedido continuar na lista de "mais de 60 dias") nos
+   cards específicos dentro da coluna de pendência de item — a coluna também tem pedidos
+   pendentes mais recentes, que não devem ficar marcados junto. */
+.order-card-pendencia-antiga {
+  border-color: #b8860b;
+  box-shadow: inset 0 0 0 1px #b8860b;
+}
+
+/* Flash temporário (alguns segundos) ao clicar no balão "mais de 60 dias" — chama a
+   atenção pros cards certos assim que a rolagem chega neles. */
+.order-card-pendencia-antiga-flash {
+  animation: order-pendencia-antiga-pulse 0.5s ease-in-out 3;
+}
+@keyframes order-pendencia-antiga-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 1px #b8860b; }
+  50% { box-shadow: inset 0 0 0 1px #b8860b, 0 0 0 6px rgba(184, 134, 11, 0.45); }
+}
+
 /* Realce temporário na coluna do quadro quando um alerta é clicado e leva até ela. */
 .status-column-highlight {
   animation: column-highlight-pulse 0.5s ease-in-out 3;
