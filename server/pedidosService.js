@@ -324,6 +324,26 @@ async function getPainelData({ periodo, de, ate }) {
   // clica no balão "há mais de 60 dias".
   const pedidosPendenciaItemMais60DiasIds = pedidosPendenciaAntigosBrutos.map((p) => p.id);
 
+  // Detalhe (número, cliente, dias parado, situação) de cada um desses pedidos, pro
+  // front conseguir listar quem são eles na janela que abre ao clicar no balão — não dá
+  // pra usar colunasFinal aqui pelo mesmo motivo do contador acima: colunasFinal só tem
+  // os pedidos dentro do período escolhido no quadro.
+  const keyParaLabel = new Map(columns.map((c) => [c.key, c.label]));
+  const pedidosPendenciaItemMais60DiasDetalhe = pedidosPendenciaAntigosBrutos
+    .map((p) => {
+      const horas = horasDesdePedido(p.data);
+      const key = situacaoIdToKey.get(p.situacao ? p.situacao.id : undefined);
+      return {
+        id: p.id,
+        numero: p.numero,
+        cliente: p.contato ? p.contato.nome : null,
+        data: p.data || null,
+        dias: horas !== null ? Math.floor(horas / 24) : null,
+        situacao: key ? keyParaLabel.get(key) : null,
+      };
+    })
+    .sort((a, b) => (b.dias || 0) - (a.dias || 0)); // mais parado primeiro
+
   if (idsSituacaoDesconhecidos) {
     situacoesService.getSituacoesVendas({ forceRefresh: true }).catch(() => {});
   }
@@ -339,6 +359,7 @@ async function getPainelData({ periodo, de, ate }) {
       pedidosPendenciaItem,
       pedidosPendenciaItemMais60Dias,
       pedidosPendenciaItemMais60DiasIds,
+      pedidosPendenciaItemMais60DiasDetalhe,
     },
     colunas: colunasFinal,
   };
