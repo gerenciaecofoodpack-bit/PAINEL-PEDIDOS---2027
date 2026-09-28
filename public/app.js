@@ -41,6 +41,9 @@
     pedidoModal: document.getElementById('pedido-modal'),
     pedidoModalClose: document.getElementById('pedido-modal-close'),
     pedidoModalContent: document.getElementById('pedido-modal-content'),
+    pendenciaAntigaModal: document.getElementById('pendencia-antiga-modal'),
+    pendenciaAntigaModalClose: document.getElementById('pendencia-antiga-modal-close'),
+    pendenciaAntigaModalContent: document.getElementById('pendencia-antiga-modal-content'),
     resetColumnOrderBtn: document.getElementById('reset-column-order-btn'),
   };
 
@@ -96,9 +99,7 @@
     pendenciaAntigaIds: new Set(),
   };
 
-  // Keys das colunas usadas pelos alertas do topo (ver renderSummary/init) — ficam aqui
-  // em escopo compartilhado porque irParaPedidosPendenciaAntiga (mais abaixo) também
-  // precisa de KEYS_PENDENCIA_ITEM, fora da função init().
+  // Keys das colunas usadas pelos alertas do topo (ver renderSummary/init).
   const KEYS_EM_ABERTO = ['Em aberto'];
   const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
 
@@ -391,6 +392,52 @@
   }
 
   // ---------------------------------------------------------------------
+  // Janela com a lista de pedidos "com item pendente há mais de 60 dias", aberta ao
+  // clicar no balão correspondente. Usa os dados que já vieram na última atualização do
+  // painel (painel.resumo.pedidosPendenciaItemMais60DiasDetalhe) — essa lista é montada
+  // no backend de forma independente do período selecionado no quadro (ver
+  // pedidosService.js), então funciona mesmo se o quadro estiver filtrado em "Hoje".
+  function renderPendenciaAntigaModal(lista) {
+    if (!lista || lista.length === 0) {
+      return '<div class="modal-subtle" style="text-align:center;padding:20px 0;">Nenhum pedido com item pendente há mais de 60 dias no momento.</div>';
+    }
+    const partes = [];
+    partes.push('<div class="modal-header"><h2>&#8987; Pendência de item há mais de 60 dias</h2></div>');
+    partes.push('<div class="pendencia-antiga-lista">');
+    for (const p of lista) {
+      partes.push(`<div class="pendencia-antiga-row" data-id="${escapeHtml(p.id)}" role="button" tabindex="0">`);
+      partes.push('<div class="pendencia-antiga-row-top">');
+      partes.push(`<span class="pendencia-antiga-numero">#${escapeHtml(p.numero)}</span>`);
+      partes.push(
+        `<span class="pendencia-antiga-dias">${escapeHtml(p.dias != null ? p.dias : '?')} dias parado</span>`
+      );
+      partes.push('</div>');
+      partes.push(`<div class="pendencia-antiga-cliente">${escapeHtml(p.cliente || '(sem cliente)')}</div>`);
+      partes.push('<div class="pendencia-antiga-meta">');
+      if (p.situacao) partes.push(`<span>${escapeHtml(p.situacao)}</span>`);
+      partes.push(`<span>Pedido de ${formatDateBR(p.data)}</span>`);
+      partes.push('</div>');
+      partes.push('</div>');
+    }
+    partes.push('</div>');
+    return partes.join('');
+  }
+
+  function openPendenciaAntigaModal() {
+    const lista = (state.lastPainel && state.lastPainel.resumo.pedidosPendenciaItemMais60DiasDetalhe) || [];
+    el.pendenciaAntigaModal.classList.remove('hidden');
+    el.pendenciaAntigaModalContent.innerHTML = renderPendenciaAntigaModal(lista);
+    stopAutoScroll();
+  }
+
+  function closePendenciaAntigaModal() {
+    if (el.pendenciaAntigaModal.classList.contains('hidden')) return;
+    el.pendenciaAntigaModal.classList.add('hidden');
+    el.pendenciaAntigaModalContent.innerHTML = '';
+    startAutoScroll();
+  }
+
+  // ---------------------------------------------------------------------
   // Arrastar e soltar para reordenar as colunas do quadro (ver a alça ☰ no cabeçalho de
   // cada coluna). A ordem escolhida é salva no navegador (COLUMN_ORDER_STORAGE_KEY).
   //
@@ -679,25 +726,6 @@
     }
   }
 
-  // Igual a irParaColuna, mas em vez de piscar a coluna inteira, rola direto até os
-  // CARDS específicos que disparam o alerta de "pendência de item há mais de 60 dias" (já
-  // marcados com a classe order-card-pendencia-antiga em appendOrderCard) e pisca só eles
-  // — a coluna de pendência de item tem outros pedidos mais recentes que não fazem parte
-  // desse alerta e não devem ser destacados.
-  function irParaPedidosPendenciaAntiga() {
-    ensureColunaVisivel(KEYS_PENDENCIA_ITEM);
-
-    const cards = Array.from(el.columnsGrid.querySelectorAll('.order-card-pendencia-antiga'));
-    if (cards.length === 0) return;
-
-    state.lastManualScrollAt = Date.now();
-    cards[0].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'center' });
-
-    for (const cardEl of cards) {
-      cardEl.classList.add('order-card-pendencia-antiga-flash');
-      setTimeout(() => cardEl.classList.remove('order-card-pendencia-antiga-flash'), 2200);
-    }
-  }
 
   // ---------------------------------------------------------------------
   // Filtro de status (multi-seleção)
@@ -1024,22 +1052,11 @@
     // Alertas do topo: clicar leva até a(s) coluna(s) correspondente(s) no quadro.
     const onAlertAbertoActivate = () => irParaColuna(KEYS_EM_ABERTO);
     const onAlertPendenciaActivate = () => irParaColuna(KEYS_PENDENCIA_ITEM);
-    // O balão de "mais de 60 dias" conta pedidos independente do período escolhido no
-    // quadro (ver renderSummary) — então, se o quadro estiver filtrado em algo mais
-    // curto que "Todo o período", os pedidos que o balão está anunciando podem nem
-    // estar na tela ainda. Por isso, ao clicar, troca o período pra "todos" primeiro (se
-    // já não estiver) e só então rola direto até os pedidos específicos (não a coluna
-    // inteira — ela tem outros pedidos pendentes mais recentes que não fazem parte
-    // deste alerta).
-    const onAlertPendencia60dActivate = async () => {
-      if (state.periodo !== 'todos') {
-        state.periodo = 'todos';
-        el.periodSelect.value = 'todos';
-        el.customPeriodGroup.classList.add('hidden');
-        await loadPedidos({ manual: true });
-      }
-      irParaPedidosPendenciaAntiga();
-    };
+    // O balão de "mais de 60 dias" abre uma janela à parte listando exatamente os
+    // pedidos que disparam o alerta (número, cliente, dias parado). Essa lista já vem
+    // pronta do backend de forma independente do período selecionado no quadro (ver
+    // pedidosService.js), então não precisa trocar o período nem recarregar nada.
+    const onAlertPendencia60dActivate = () => openPendenciaAntigaModal();
     el.alertAbertoVencido.addEventListener('click', onAlertAbertoActivate);
     el.alertAbertoVencido.addEventListener('keydown', (evt) => {
       if (evt.key === 'Enter' || evt.key === ' ') {
@@ -1078,10 +1095,35 @@
     el.pedidoModal.addEventListener('click', (evt) => {
       if (evt.target === el.pedidoModal) closePedidoModal();
     });
+
+    el.pendenciaAntigaModalClose.addEventListener('click', closePendenciaAntigaModal);
+    el.pendenciaAntigaModal.addEventListener('click', (evt) => {
+      if (evt.target === el.pendenciaAntigaModal) closePendenciaAntigaModal();
+    });
+    // Clicar numa linha da lista fecha esta janela e abre o detalhe completo do pedido
+    // (o mesmo modal usado ao clicar num card do quadro).
+    el.pendenciaAntigaModalContent.addEventListener('click', (evt) => {
+      const row = evt.target.closest('.pendencia-antiga-row');
+      if (!row) return;
+      const id = row.dataset.id;
+      closePendenciaAntigaModal();
+      openPedidoModal(id);
+    });
+    el.pendenciaAntigaModalContent.addEventListener('keydown', (evt) => {
+      if (evt.key !== 'Enter' && evt.key !== ' ') return;
+      const row = evt.target.closest('.pendencia-antiga-row');
+      if (!row) return;
+      evt.preventDefault();
+      const id = row.dataset.id;
+      closePendenciaAntigaModal();
+      openPedidoModal(id);
+    });
+
     document.addEventListener('keydown', (evt) => {
       if (evt.key === 'Escape') {
         closeStatusFilterPanel();
         closePedidoModal();
+        closePendenciaAntigaModal();
       }
     });
 

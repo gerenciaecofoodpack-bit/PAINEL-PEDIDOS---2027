@@ -223,16 +223,6 @@ button {
   box-shadow: inset 0 0 0 1px #b8860b;
 }
 
-/* Flash temporário (alguns segundos) ao clicar no balão "mais de 60 dias" — chama a
-   atenção pros cards certos assim que a rolagem chega neles. */
-.order-card-pendencia-antiga-flash {
-  animation: order-pendencia-antiga-pulse 0.5s ease-in-out 3;
-}
-@keyframes order-pendencia-antiga-pulse {
-  0%, 100% { box-shadow: inset 0 0 0 1px #b8860b; }
-  50% { box-shadow: inset 0 0 0 1px #b8860b, 0 0 0 6px rgba(184, 134, 11, 0.45); }
-}
-
 /* Realce temporário na coluna do quadro quando um alerta é clicado e leva até ela. */
 .status-column-highlight {
   animation: column-highlight-pulse 0.5s ease-in-out 3;
@@ -748,6 +738,52 @@ body.dragging-column {
   color: var(--text);
   white-space: pre-wrap;
   margin: 0;
+}
+
+/* Janela "Pendência de item há mais de 60 dias" (lista aberta ao clicar no balão). */
+.pendencia-antiga-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pendencia-antiga-row {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 4px solid #b8860b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.pendencia-antiga-row:hover,
+.pendencia-antiga-row:focus-visible {
+  border-color: #b8860b;
+}
+.pendencia-antiga-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 700;
+}
+.pendencia-antiga-numero { color: var(--text); }
+.pendencia-antiga-dias {
+  color: #d9a441;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pendencia-antiga-cliente {
+  color: var(--text);
+  margin-top: 3px;
+  font-size: 13.5px;
+}
+.pendencia-antiga-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 @media (max-width: 640px) {
