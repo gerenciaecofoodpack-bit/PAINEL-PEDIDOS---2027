@@ -20,6 +20,8 @@
     summaryAbertoVencido: document.getElementById('summary-aberto-vencido'),
     alertPendenciaItem: document.getElementById('alert-pendencia-item'),
     summaryPendenciaItem: document.getElementById('summary-pendencia-item'),
+    alertPendenciaItem60d: document.getElementById('alert-pendencia-item-60d'),
+    summaryPendenciaItem60d: document.getElementById('summary-pendencia-item-60d'),
     searchInput: document.getElementById('search-input'),
     periodSelect: document.getElementById('period-select'),
     customPeriodGroup: document.getElementById('custom-period-group'),
@@ -171,6 +173,13 @@
     const pendenciaItem = painel.resumo.pedidosPendenciaItem || 0;
     el.summaryPendenciaItem.textContent = pendenciaItem;
     el.alertPendenciaItem.classList.toggle('hidden', pendenciaItem === 0);
+
+    // Esta contagem vem independente do período selecionado no quadro (ver
+    // pedidosService.js) — por isso pode aparecer com um número mesmo se o quadro
+    // estiver filtrado em "Hoje" e nenhum desses pedidos antigos estiver visível ali.
+    const pendenciaItem60d = painel.resumo.pedidosPendenciaItemMais60Dias || 0;
+    el.summaryPendenciaItem60d.textContent = pendenciaItem60d;
+    el.alertPendenciaItem60d.classList.toggle('hidden', pendenciaItem60d === 0);
   }
 
   function orderMatchesSearch(pedido, search) {
@@ -979,6 +988,20 @@
     const KEYS_PENDENCIA_ITEM = ['Pendente ítem - Fábrica', 'Pendente item - Bonsucesso'];
     const onAlertAbertoActivate = () => irParaColuna(KEYS_EM_ABERTO);
     const onAlertPendenciaActivate = () => irParaColuna(KEYS_PENDENCIA_ITEM);
+    // O balão de "mais de 60 dias" conta pedidos independente do período escolhido no
+    // quadro (ver renderSummary) — então, se o quadro estiver filtrado em algo mais
+    // curto que "Todo o período", os pedidos que o balão está anunciando podem nem
+    // estar na tela ainda. Por isso, ao clicar, troca o período pra "todos" primeiro (se
+    // já não estiver) e só then rola até a coluna.
+    const onAlertPendencia60dActivate = async () => {
+      if (state.periodo !== 'todos') {
+        state.periodo = 'todos';
+        el.periodSelect.value = 'todos';
+        el.customPeriodGroup.classList.add('hidden');
+        await loadPedidos({ manual: true });
+      }
+      irParaColuna(KEYS_PENDENCIA_ITEM);
+    };
     el.alertAbertoVencido.addEventListener('click', onAlertAbertoActivate);
     el.alertAbertoVencido.addEventListener('keydown', (evt) => {
       if (evt.key === 'Enter' || evt.key === ' ') {
@@ -991,6 +1014,13 @@
       if (evt.key === 'Enter' || evt.key === ' ') {
         evt.preventDefault();
         onAlertPendenciaActivate();
+      }
+    });
+    el.alertPendenciaItem60d.addEventListener('click', onAlertPendencia60dActivate);
+    el.alertPendenciaItem60d.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter' || evt.key === ' ') {
+        evt.preventDefault();
+        onAlertPendencia60dActivate();
       }
     });
 
