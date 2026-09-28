@@ -458,6 +458,7 @@ async function getPedidoDetalhe(idPedidoVenda) {
     enderecoEntrega: enderecoEntrega || null,
     cidadeEntrega: cidadeEntrega || null,
     observacoes: p.observacoes || null,
+    observacoesInternas: p.observacoesInternas || null,
     numeroPedidoCompra: p.numeroPedidoCompra || null,
   };
 }
